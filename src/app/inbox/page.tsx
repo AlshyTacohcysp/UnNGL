@@ -29,7 +29,7 @@ export default async function InboxListPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
       <header className="mb-8">
-        <p className="stamp">your links</p>
+        <p className="pill pill-outline">your links</p>
         <h1 className="display-lg mt-4">Inboxes</h1>
         <p className="mt-2 max-w-prose leading-relaxed text-ink-soft">
           Each one is a link you can hand out. Whoever has the link can write to you, and

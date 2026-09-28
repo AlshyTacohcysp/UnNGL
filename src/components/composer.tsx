@@ -6,6 +6,10 @@
  * Sends a message and, optionally, a colour hint. Everything happens in one
  * multipart POST so the photo and the message can't get out of sync.
  *
+ * The mockup's order is deliberate and kept verbatim: what you're sending to,
+ * then the prompt, then the hint, then the one button. Nothing is asked of the
+ * sender before the message box.
+ *
  * @license AGPL-3.0-or-later
  */
 
@@ -26,6 +30,7 @@ export function Composer({ slug, title, maxChars }: Props) {
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
   const [claimUrl, setClaimUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   async function submit(e: React.FormEvent) {
@@ -69,45 +74,51 @@ export function Composer({ slug, title, maxChars }: Props) {
     }
   }
 
+  async function copy(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard blocked: the URL is on screen and selectable */
+    }
+  }
+
   if (status === 'sent') {
     return (
-      <div className="card p-6">
-        <p className="stamp">sent</p>
-        <h2 className="display-md mt-4">It’s through.</h2>
-        <p className="mt-3 max-w-prose leading-relaxed">
-          They’ll see it as soon as they open their link
-          {claimUrl
-            ? '. If you forgot to attach a hint, you can still add one using the private link below — only you have it.'
-            : '.'}
+      <div className="card p-6 sm:p-8">
+        <span className="pill">
+          <span className="block h-2 w-2 rounded-full bg-teal" />
+          Sent
+        </span>
+        <h2 className="serif-accent mt-5 text-4xl text-ink">It’s through.</h2>
+        <p className="mt-3 max-w-prose leading-relaxed text-ink-soft">
+          {title} will see it as soon as they open their link.
         </p>
 
         {claimUrl && (
-          <div className="mt-5 border-[2.5px] border-ink bg-paper-2 p-4">
-            <p className="label">Your private claim link</p>
-            <p className="mono-chip break-all">{claimUrl}</p>
+          <div className="card-sunk mt-6 p-4">
+            <p className="label">Your private link</p>
+            <p className="mt-2 break-all text-sm text-ink-soft">{claimUrl}</p>
             <p className="mt-2 text-sm text-ink-soft">
-              Keep it if you want to change or add your palette later. It reveals
+              Only you have this one. Use it to add or change your colours later — it reveals
               nothing on its own.
             </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="btn btn-sm"
-                onClick={() => void navigator.clipboard?.writeText(claimUrl)}
-              >
-                Copy link
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" className="btn btn-sm" onClick={() => void copy(claimUrl)}>
+                {copied ? 'Copied' : 'Copy link'}
               </button>
-              <a href={claimUrl} className="btn btn-sm btn-acid">
+              <a href={claimUrl} className="btn btn-sm btn-outline">
                 Open it
               </a>
             </div>
           </div>
         )}
 
-        <div className="mt-6 flex flex-wrap gap-3">
+        <div className="mt-7 flex flex-wrap gap-3">
           <button
             type="button"
-            className="btn"
+            className="btn btn-primary"
             onClick={() => {
               setStatus('idle');
               setClaimUrl(null);
@@ -121,9 +132,23 @@ export function Composer({ slug, title, maxChars }: Props) {
   }
 
   return (
-    <form ref={formRef} onSubmit={submit} className="card p-5 sm:p-6">
-      <h2 className="display-md">Leave {title} a message</h2>
-      <p className="mt-2 text-ink-soft">Anonymous. No account, no name, no number.</p>
+    <form ref={formRef} onSubmit={submit} className="card p-5 sm:p-8">
+      {/* 1. who it's for */}
+      <div className="flex items-center gap-3">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-ink text-base font-bold text-white">
+          {title.slice(0, 1).toUpperCase()}
+        </span>
+        <div className="min-w-0">
+          <p className="label">Sending to</p>
+          <p className="truncate text-lg font-bold tracking-tight text-ink">{title}</p>
+        </div>
+      </div>
+
+      {/* 2. the prompt, in the serif — this is the only voice on the page */}
+      <label htmlFor="body" className="serif-accent mt-7 block text-3xl leading-tight text-ink sm:text-[2.1rem]">
+        What would you like to tell them?
+      </label>
+      <p className="mt-1 text-sm text-ink-soft">Anonymous. No account, no name, no number.</p>
 
       {/* honeypot — hidden from people, tempting to bots */}
       <div aria-hidden className="absolute left-[-9999px] top-0 h-0 w-0 overflow-hidden">
@@ -131,41 +156,38 @@ export function Composer({ slug, title, maxChars }: Props) {
         <input id="website" name="website" type="text" tabIndex={-1} autoComplete="off" />
       </div>
 
-      <div className="mt-5">
-        <label htmlFor="body" className="label">
-          Message
-        </label>
-        <textarea
-          id="body"
-          name="body"
-          className="field min-h-[9rem] resize-y text-lg"
-          placeholder="say the thing…"
-          value={body}
-          maxLength={maxChars}
-          onChange={(e) => setBody(e.target.value)}
-        />
-        <p className="mono-chip mt-1 text-right text-ink-soft">
-          {body.length} / {maxChars}
-        </p>
-      </div>
+      <textarea
+        id="body"
+        name="body"
+        className="field field-serif mt-4 min-h-[9.5rem] resize-y"
+        placeholder="say the thing…"
+        value={body}
+        maxLength={maxChars}
+        onChange={(e) => setBody(e.target.value)}
+      />
+      <p className="mt-1.5 text-right text-xs text-ink-faint">
+        {body.length} / {maxChars}
+      </p>
 
-      <div className="mt-4 border-t-[2.5px] border-ink pt-4">
+      {/* 3. the hint */}
+      <div className="mt-6">
         <HintPicker value={hint} onChange={setHint} />
       </div>
 
       {error && (
-        <p role="alert" className="mt-4 border-[2.5px] border-ink bg-punch px-3 py-2 text-paper">
+        <p role="alert" className="alert-error mt-5">
           {error}
         </p>
       )}
 
-      <button type="submit" className="btn btn-punch mt-5 w-full text-lg" disabled={status === 'sending'}>
-        {status === 'sending' ? 'Sending…' : 'Send anonymously →'}
+      {/* 4. the one button, with the coral slab under it */}
+      <button
+        type="submit"
+        className="btn btn-primary mt-7 w-full text-lg"
+        disabled={status === 'sending'}
+      >
+        {status === 'sending' ? 'Sending…' : 'Send anonymously'}
       </button>
-
-      <p className="mt-3 text-center text-sm text-ink-soft">
-        Nothing here is for sale. Attach a photo only if you want your colours shown.
-      </p>
     </form>
   );
 }

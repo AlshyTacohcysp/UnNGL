@@ -50,7 +50,7 @@ const ROWS: Array<[string, string, string]> = [
 export default function PrivacyPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-16">
-      <p className="stamp">plain english</p>
+      <p className="pill pill-outline">plain english</p>
       <h1 className="display-lg mt-4">Privacy</h1>
       <p className="serif-accent mt-3 text-2xl leading-snug">
         We are not selling your data, because we are not collecting data worth selling.
@@ -77,7 +77,7 @@ export default function PrivacyPage() {
       <div className="mt-4 overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-[2.5px] border-ink bg-paper-2 text-left">
+            <tr className="border-0 bg-surface-sunk text-left">
               <th className="p-2">thing</th>
               <th className="p-2">form</th>
               <th className="p-2">kept for</th>
@@ -85,7 +85,7 @@ export default function PrivacyPage() {
           </thead>
           <tbody>
             {ROWS.map(([a, b, c]) => (
-              <tr key={a} className="border-[2.5px] border-ink align-top">
+              <tr key={a} className="border-0 align-top">
                 <td className="p-2 font-semibold">{a}</td>
                 <td className="p-2 text-ink-soft">{b}</td>
                 <td className="p-2 text-ink-soft">{c}</td>

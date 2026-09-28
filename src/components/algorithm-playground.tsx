@@ -48,7 +48,7 @@ export function AlgorithmPlayground() {
           const file = e.dataTransfer.files?.[0];
           if (file) void handle(file);
         }}
-        className="flex flex-col items-center gap-2 border-[2.5px] border-dashed border-ink bg-paper-2 p-6 text-center"
+        className="flex flex-col items-center gap-2 border-[2.5px] border-dashed border-ink bg-surface-sunk p-6 text-center"
       >
         <p className="serif-accent text-2xl">throw an image at it</p>
         <p className="text-sm text-ink-soft">
@@ -65,14 +65,14 @@ export function AlgorithmPlayground() {
             if (file) void handle(file);
           }}
         />
-        <button type="button" className="btn btn-sun mt-2" onClick={() => inputRef.current?.click()}>
+        <button type="button" className="btn btn-outline btn-sm mt-2" onClick={() => inputRef.current?.click()}>
           Choose an image
         </button>
       </div>
 
-      {busy && <p className="mono-chip mt-4">running…</p>}
+      {busy && <p className="font-mono text-[0.68rem] mt-4">running…</p>}
       {error && (
-        <p role="alert" className="mt-4 border-[2.5px] border-ink bg-punch px-3 py-2 text-paper">
+        <p role="alert" className="alert-error mt-4">
           {error}
         </p>
       )}
@@ -84,7 +84,7 @@ export function AlgorithmPlayground() {
             <img
               src={result.previewUrl}
               alt="The image you dropped in"
-              className="w-full border-[2.5px] border-ink shadow-hard"
+              className="w-full border-0 shadow-lift"
             />
             <PaletteCollage colors={result.palette.colors} footnote verified />
           </div>
@@ -111,7 +111,7 @@ export function AlgorithmPlayground() {
               {showJson ? 'Hide' : 'Show'} the canonical JSON
             </button>
             {showJson && (
-              <pre className="mono-chip mt-3 overflow-x-auto border-[2.5px] border-ink bg-ink p-3 text-paper">
+              <pre className="font-mono text-[0.68rem] mt-3 overflow-x-auto border-0 bg-ink p-3 text-white">
                 {canonicalPaletteJson(result.palette)}
               </pre>
             )}
@@ -129,8 +129,8 @@ export function AlgorithmPlayground() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border-[2.5px] border-ink px-3 py-2">
-      <dt className="mono-chip text-ink-soft">{label}</dt>
+    <div className="border-0 px-3 py-2">
+      <dt className="font-mono text-[0.68rem] text-ink-soft">{label}</dt>
       <dd className="font-semibold break-all">{value}</dd>
     </div>
   );

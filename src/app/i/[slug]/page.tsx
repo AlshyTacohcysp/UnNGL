@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { MessagesPanel } from '@/components/messages-panel';
+import { CollageHeader } from '@/components/blob-collage';
 import { InboxSettings } from '@/components/inbox-settings';
 import { currentUserId } from '@/lib/auth';
 import { getInboxBySlug, listMessages, markAllSeen } from '@/lib/inbox';
@@ -32,15 +33,20 @@ export default async function InboxPage({ params }: { params: Promise<{ slug: st
   if (messages.some((m) => !m.seen)) await markAllSeen(inbox.id);
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
-      <header className="mb-8">
-        <p className="stamp">inbox</p>
-        <h1 className="display-lg mt-4">{inbox.title}</h1>
-        <p className="mt-2 text-ink-soft">
-          {messages.length} message{messages.length === 1 ? '' : 's'} · every hint shown in full,
-          nothing locked
-        </p>
-      </header>
+    <div className="pb-20">
+      {/* The mockup's inbox header: a short band of blobs with the count
+          sitting on it, then the cards begin. The collage here is deliberately
+          smaller than the send page's — this screen is about reading. */}
+      <CollageHeader className="px-4 pt-8 pb-14 sm:px-6">
+        <div className="mx-auto max-w-3xl">
+          <p className="text-sm font-semibold text-ink">
+            {messages.length} message{messages.length === 1 ? '' : 's'}
+          </p>
+          <h1 className="display-lg mt-2">Your messages</h1>
+        </div>
+      </CollageHeader>
+
+      <div className="mx-auto -mt-9 max-w-3xl px-4 sm:px-6">
 
       <MessagesPanel slug={inbox.slug} title={inbox.title} messages={messages} />
 
@@ -52,11 +58,12 @@ export default async function InboxPage({ params }: { params: Promise<{ slug: st
         />
       </div>
 
-      <p className="mt-10 text-center text-sm text-ink-soft">
-        <Link href="/inbox" className="underline decoration-2 underline-offset-2">
-          ← all your inboxes
-        </Link>
-      </p>
+        <p className="mt-10 text-center text-sm text-ink-soft">
+          <Link href="/inbox" className="font-semibold text-ink underline decoration-2 underline-offset-4">
+            ← all your inboxes
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }

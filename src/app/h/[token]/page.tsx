@@ -23,7 +23,7 @@ export default async function ClaimPage({ params }: { params: Promise<{ token: s
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6 sm:py-20">
-      <p className="stamp">private</p>
+      <p className="pill pill-outline">private</p>
       <h1 className="display-lg mt-4">This link is yours.</h1>
       <p className="mt-3 max-w-prose leading-relaxed">
         It’s the only key to the message you sent{inbox ? ` to “${inbox.title}”` : ''}. Nobody

@@ -50,7 +50,7 @@ export function ClaimForm({ token, existing }: { token: string; existing: boolea
   if (done) {
     return (
       <div className="card p-6">
-        <p className="stamp">attached</p>
+        <p className="pill pill-outline">attached</p>
         <h2 className="display-md mt-4">They can see your colours now.</h2>
         <div className="mt-5">
           <PaletteCollage colors={done.colors} footnote verified={done.verified} />
@@ -79,12 +79,12 @@ export function ClaimForm({ token, existing }: { token: string; existing: boolea
       </div>
 
       {error && (
-        <p role="alert" className="mt-4 border-[2.5px] border-ink bg-punch px-3 py-2 text-paper">
+        <p role="alert" className="alert-error mt-4">
           {error}
         </p>
       )}
 
-      <button type="submit" className="btn btn-punch mt-5 w-full text-lg" disabled={!hint || busy}>
+      <button type="submit" className="btn btn-primary mt-5 w-full text-lg" disabled={!hint || busy}>
         {busy ? 'Working…' : 'Send my colours →'}
       </button>
     </form>

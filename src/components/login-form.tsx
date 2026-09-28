@@ -112,7 +112,7 @@ export function LoginForm({
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-5">
       {notice && (
-        <p className="card-flat border-[2.5px] border-ink bg-sun p-3 text-sm">{notice}</p>
+        <p className="card-flat border-0 bg-amber p-3 text-sm">{notice}</p>
       )}
 
       <div className="card p-6">
@@ -140,7 +140,7 @@ export function LoginForm({
                 No password to forget, nothing to phish. We send a 6-digit code.
               </p>
             </div>
-            <button type="submit" className="btn btn-punch w-full text-lg" disabled={busy}>
+            <button type="submit" className="btn btn-primary w-full text-lg" disabled={busy}>
               {busy ? 'Sending…' : 'Email me a code →'}
             </button>
           </form>
@@ -150,9 +150,9 @@ export function LoginForm({
               Code sent to <strong className="text-ink">{email}</strong>. It expires in 10 minutes.
             </p>
             {devCode && devMode && (
-              <p className="border-[2.5px] border-ink bg-acid px-3 py-2 text-sm">
+              <p className="border-0 bg-amber px-3 py-2 text-sm">
                 No mail server configured — your code is{' '}
-                <strong className="mono-chip">{devCode}</strong>
+                <strong className="font-mono text-[0.68rem]">{devCode}</strong>
               </p>
             )}
             <div>
@@ -173,7 +173,7 @@ export function LoginForm({
             </div>
             <button
               type="submit"
-              className="btn btn-punch w-full text-lg"
+              className="btn btn-primary w-full text-lg"
               disabled={busy || code.length !== 6}
             >
               {busy ? 'Checking…' : 'Sign in →'}
@@ -203,7 +203,7 @@ export function LoginForm({
         )}
 
         {error && (
-          <p role="alert" className="mt-4 border-[2.5px] border-ink bg-punch px-3 py-2 text-paper">
+          <p role="alert" className="mt-4 border-0 bg-coral px-3 py-2 text-white">
             {error}
           </p>
         )}
@@ -222,13 +222,13 @@ export function LoginForm({
                 title={p.configured ? undefined : p.note ?? 'Not configured on this server'}
               >
                 <span>{p.label}</span>
-                <span className="mono-chip">{p.configured ? 'connect' : 'not set up'}</span>
+                <span className="font-mono text-[0.68rem]">{p.configured ? 'connect' : 'not set up'}</span>
               </a>
             ))}
           </div>
           {providers.some((p) => !p.configured) && (
             <p className="mt-3 text-sm text-ink-soft">
-              OAuth keys come from the environment — see <code className="mono-chip">.env.example</code>.
+              OAuth keys come from the environment — see <code className="font-mono text-[0.68rem]">.env.example</code>.
               Email always works with no configuration.
             </p>
           )}

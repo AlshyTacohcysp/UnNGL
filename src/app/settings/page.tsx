@@ -19,7 +19,7 @@ export default async function SettingsPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6 sm:py-14">
       <header className="mb-8">
-        <p className="stamp">account</p>
+        <p className="pill pill-outline">account</p>
         <h1 className="display-lg mt-4">Settings</h1>
       </header>
 

@@ -1,17 +1,24 @@
 'use client';
 
 /**
- * The palette collage: UnNGL's version of NGL's "reveal" card.
+ * The palette card — UnNGL's version of NGL's "reveal" card.
  *
- * Six colour scraps torn out of someone's photo, printed with the same ink
- * outlines and hard shadows as the rest of the site. The layout is fixed (not
- * random) so the server-rendered markup and the client hydration match exactly.
+ * The old design printed six torn scraps with ink outlines and hard shadows.
+ * The new one is quieter and closer to the product's actual claim: the colours
+ * are the hint, so they get the whole frame, overlapping as blobs, and
+ * everything else shrinks to a caption. The hex labels survive, because on the
+ * algorithm and claim pages they are the point — they are what a reader
+ * checks their own implementation against.
+ *
+ * The layout is fixed, not random, so the server-rendered markup and the client
+ * hydration match exactly.
  *
  * @license AGPL-3.0-or-later
  */
 
 import { isLight } from '@/lib/palette/client';
 import { paletteHash } from '@/lib/palette/extract';
+import { cn } from '@/lib/cn';
 
 export interface CollapsedPalette {
   colors: string[];
@@ -32,13 +39,26 @@ interface Props {
   compact?: boolean;
 }
 
-/** Fixed misregistration offsets — deterministic, so SSR and client agree. */
-const BAR_TILT = [-2, 1.6, -1.1, 2.1, -1.7] as const;
-const BAR_SHIFT = [-2, 1, 0, -1.5, 2] as const;
+/** Fixed, deterministic — see the note above. */
+const BLOBS = [
+  { color: 0, left: -14, top: -30, size: 72, shape: 0 },
+  { color: 2, left: 26, top: -22, size: 64, shape: 1 },
+  { color: 4, left: 58, top: 6, size: 66, shape: 2 },
+  { color: 1, left: 6, top: 34, size: 58, shape: 3 },
+  { color: 5, left: 46, top: 44, size: 62, shape: 4 },
+] as const;
+
+const SHAPES = [
+  '58% 42% 47% 53% / 52% 44% 56% 48%',
+  '44% 56% 38% 62% / 61% 39% 61% 39%',
+  '62% 38% 55% 45% / 45% 58% 42% 55%',
+  '38% 62% 61% 39% / 55% 41% 59% 45%',
+  '52% 48% 42% 58% / 43% 57% 43% 57%',
+];
 
 export function PaletteCollage({
   colors,
-  className = '',
+  className,
   labels = true,
   footnote = false,
   algorithm = '1.0.0',
@@ -53,57 +73,51 @@ export function PaletteCollage({
   });
 
   return (
-    <figure className={`card ${compact ? 'p-2' : 'p-3'} ${className}`}>
-      <div className="flex items-stretch">
-        {/* dominant colour: the big scrap */}
-        <div
-          className="relative z-10 w-[44%] shrink-0 border-[2.5px] border-ink"
-          style={{ background: six[0], transform: 'rotate(-1.6deg)' }}
-        >
-          <div className="aspect-square w-full" />
-          {labels && (
-            <span
-              className="mono-chip absolute bottom-1 left-1.5 border-[2px] border-ink px-1 py-[1px]"
-              style={{
-                background: isLight(six[0]!) ? '#f6f1e6' : '#16130f',
-                color: isLight(six[0]!) ? '#16130f' : '#f6f1e6',
-              }}
-            >
-              {six[0]}
-            </span>
-          )}
-        </div>
+    <figure className={cn(compact ? 'p-2' : 'p-3', className)}>
+      <div
+        className="relative overflow-hidden rounded-2xl"
+        role="img"
+        aria-label={`Palette: ${six.join(' ')}`}
+      >
+        <span className="absolute inset-0 block" style={{ background: six[0] }} />
+        {BLOBS.map((b, i) => (
+          <span
+            key={i}
+            aria-hidden
+            className="absolute block"
+            style={{
+              left: `${b.left}%`,
+              top: `${b.top}%`,
+              width: `${b.size}%`,
+              height: `${b.size}%`,
+              background: six[b.color],
+              borderRadius: SHAPES[b.shape],
+            }}
+          />
+        ))}
 
-        {/* the rest: shredded strips, each nudged out of register */}
-        <div className="-ml-2.5 flex min-w-0 flex-1 flex-col justify-between">
-          {six.slice(1).map((hex, i) => (
-            <div
-              key={`${hex}-${i}`}
-              className="relative -ml-1 flex-1 border-[2.5px] border-ink"
-              style={{
-                background: hex,
-                transform: `rotate(${BAR_TILT[i] ?? 0}deg) translateY(${BAR_SHIFT[i] ?? 0}px)`,
-                zIndex: 10 - i,
-              }}
-            >
-              {labels && (
-                <span
-                  className="mono-chip absolute right-1.5 top-1/2 -translate-y-1/2 border-[2px] border-ink px-1 py-[1px]"
-                  style={{
-                    background: isLight(hex) ? '#f6f1e6' : '#16130f',
-                    color: isLight(hex) ? '#16130f' : '#f6f1e6',
-                  }}
-                >
-                  {hex}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
+        {/* The hexes ride on the bottom edge as small pills, each one picking
+            its own foreground so it stays readable on any of the six. */}
+        {labels && (
+          <div className="absolute inset-x-0 bottom-0 flex flex-wrap gap-1 p-1.5">
+            {six.map((hex, i) => (
+              <span
+                key={`${hex}-${i}`}
+                className="rounded-full px-1.5 py-0.5 font-mono text-[0.62rem] leading-none"
+                style={{
+                  background: isLight(hex) ? 'rgba(255,255,255,0.92)' : 'rgba(27,27,51,0.88)',
+                  color: isLight(hex) ? '#1b1b33' : '#ffffff',
+                }}
+              >
+                {hex}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {footnote && (
-        <figcaption className="mono-chip mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-ink-soft">
+        <figcaption className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[0.68rem] text-ink-soft">
           <span>UnNGL palette v{algorithm}</span>
           <span aria-hidden>·</span>
           <span>6 colours</span>
@@ -112,7 +126,7 @@ export function PaletteCollage({
           {verified !== undefined && (
             <>
               <span aria-hidden>·</span>
-              <span className={verified ? 'text-ink' : 'text-punch'}>
+              <span className={verified ? 'text-ink' : 'text-coral'}>
                 {verified ? 'server-verified' : 'unverified'}
               </span>
             </>
@@ -126,7 +140,7 @@ export function PaletteCollage({
 /** Compact strip for lists and avatars. */
 export function PaletteBars({
   colors,
-  className = '',
+  className,
   height = 14,
 }: {
   colors: string[];
@@ -135,11 +149,7 @@ export function PaletteBars({
 }) {
   const six = normalize(colors);
   return (
-    <div
-      className={`flex overflow-hidden border-[2px] border-ink ${className}`}
-      style={{ height }}
-      aria-hidden
-    >
+    <div className={cn('flex overflow-hidden rounded-full', className)} style={{ height }} aria-hidden>
       {six.map((hex, i) => (
         <div key={`${hex}-${i}`} className="flex-1" style={{ background: hex }} />
       ))}

@@ -116,13 +116,13 @@ export function InboxDashboard({ inboxes }: { inboxes: InboxSummary[] }) {
             onChange={(e) => setTitle(e.target.value)}
           />
         </div>
-        <button type="submit" className="btn btn-punch" disabled={busy}>
+        <button type="submit" className="btn btn-primary" disabled={busy}>
           {busy ? 'Making…' : 'Create a link'}
         </button>
       </form>
 
       {error && (
-        <p role="alert" className="border-[2.5px] border-ink bg-punch px-3 py-2 text-paper">
+        <p role="alert" className="alert-error">
           {error}
         </p>
       )}
@@ -136,17 +136,17 @@ export function InboxDashboard({ inboxes }: { inboxes: InboxSummary[] }) {
         <ul className="grid gap-5 sm:grid-cols-2">
           {items.map((inbox) => (
             <li key={inbox.slug}>
-              <article className="card card-lift flex h-full flex-col p-5">
+              <article className="card flex h-full flex-col p-5">
                 <div className="flex items-start gap-3">
                   <h2 className="flex-1 text-2xl">{inbox.title}</h2>
                   {inbox.unread > 0 && (
-                    <span className="border-[2.5px] border-ink bg-punch px-2 py-0.5 text-sm font-bold text-paper shadow-hard-sm">
+                    <span className="pill bg-coral px-2.5 py-1 text-xs font-bold text-white">
                       {inbox.unread}
                     </span>
                   )}
                 </div>
 
-                <p className="mono-chip mt-1 text-ink-soft">
+                <p className="font-mono text-[0.68rem] mt-1 text-ink-soft">
                   {inbox.total} message{inbox.total === 1 ? '' : 's'}
                   {inbox.lastMessageAt ? ` · last ${formatWhen(inbox.lastMessageAt)}` : ''}
                 </p>
@@ -158,7 +158,7 @@ export function InboxDashboard({ inboxes }: { inboxes: InboxSummary[] }) {
                 )}
 
                 <div className="mt-auto flex flex-wrap gap-2 pt-4">
-                  <Link href={`/i/${inbox.slug}`} className="btn btn-sm btn-acid">
+                  <Link href={`/i/${inbox.slug}`} className="btn btn-sm btn-outline">
                     Open
                   </Link>
                   <button

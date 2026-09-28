@@ -7,12 +7,17 @@
  * computed from are what we upload — so the server can independently recompute
  * the same six colours and mark the hint "verified".
  *
+ * The mockup makes the hint optional and quiet: a switch, a strip, and a
+ * dashed drop target that only appears once you've said yes to having one. So
+ * the control starts as a line of text, not a box asking for a file.
+ *
  * @license AGPL-3.0-or-later
  */
 
 import { useCallback, useId, useRef, useState } from 'react';
 import { fetchRemoteImage, prepareImage, type PreparedImage } from '@/lib/palette/client';
-import { PaletteCollage } from './palette-collage';
+import { PalettePill } from './palette-strip';
+import { PALETTE_SIZE } from '@/lib/palette/extract';
 
 export interface HintValue {
   png: Blob;
@@ -35,7 +40,7 @@ export function HintPicker({
   onChange,
   allowUrl = true,
   idPrefix = 'hint',
-  label = 'Attach a colour hint',
+  label = 'Add a colour hint',
   compact = false,
 }: Props) {
   const inputId = useId();
@@ -44,6 +49,9 @@ export function HintPicker({
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState('');
   const [dragging, setDragging] = useState(false);
+  // Once someone has opted in, the target stays open — un-toggling a photo
+  // mid-choice would throw away work they may want to undo.
+  const [wantsHint, setWantsHint] = useState(false);
 
   const accept = useCallback(
     async (blob: Blob, source: HintValue['source']) => {
@@ -78,16 +86,60 @@ export function HintPicker({
     }
   }, [accept, url]);
 
+  // Turning the hint off releases the image entirely: the sender's browser
+  // forgets it and nothing is queued to upload.
+  const clear = useCallback(() => {
+    onChange(null);
+    setError(null);
+    setWantsHint(false);
+  }, [onChange]);
+
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <label htmlFor={inputId} className="label mb-0">
-          {label}
-        </label>
-        <span className="mono-chip text-ink-soft">optional · free · never shown as a photo</span>
+      {/* The switch row: what it is, and the promise, side by side. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <span className="flex items-center gap-2.5">
+          <span
+            className={`relative block h-6 w-11 shrink-0 rounded-full transition-colors ${
+              wantsHint || value ? 'bg-teal' : 'bg-line'
+            }`}
+          >
+            <button
+              type="button"
+              role="switch"
+              aria-checked={Boolean(value) || wantsHint}
+              aria-label={label}
+              onClick={() => {
+                if (wantsHint || value) clear();
+                else setWantsHint(true);
+              }}
+              className={`absolute top-0.5 left-0.5 block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                wantsHint || value ? 'translate-x-5' : ''
+              }`}
+            />
+          </span>
+          <span className="font-semibold text-ink">{label}</span>
+        </span>
+        <span className="text-xs text-ink-soft">
+          optional · free · {PALETTE_SIZE} colours, never your photo
+        </span>
       </div>
 
-      {!value && (
+      {value && <PalettePill colors={value.palette.colors} className={compact ? 'h-6' : undefined} />}
+
+      {value && (
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-xs text-ink-soft">
+            {value.palette.colors.length} colours · dominant{' '}
+            {Math.round(value.palette.weight * 100)}% of the image
+          </p>
+          <button type="button" className="btn btn-sm btn-quiet" onClick={clear}>
+            Remove
+          </button>
+        </div>
+      )}
+
+      {!value && (wantsHint || error) && (
         <div
           onDragOver={(e) => {
             e.preventDefault();
@@ -100,21 +152,20 @@ export function HintPicker({
             const file = e.dataTransfer.files?.[0];
             if (file) void accept(file, 'upload');
           }}
-          className={`flex flex-col items-center gap-2 border-[2.5px] border-dashed p-5 text-center transition-colors ${
-            dragging ? 'bg-acid' : 'bg-paper-2'
+          className={`card-dashed flex flex-col items-center gap-1.5 p-5 text-center transition-colors ${
+            dragging ? 'bg-surface' : ''
           }`}
         >
           <p className="text-sm leading-snug text-ink-soft">
             Drop a photo here, or
             <button
               type="button"
-              className="mx-1 underline decoration-2 underline-offset-2"
+              className="mx-1 font-semibold text-ink underline decoration-2 underline-offset-2"
               onClick={() => fileRef.current?.click()}
             >
               choose a file
             </button>
           </p>
-          <p className="label mt-3">your colours, not your face</p>
         </div>
       )}
 
@@ -130,10 +181,10 @@ export function HintPicker({
         }}
       />
 
-      {!value && allowUrl && (
+      {!value && allowUrl && wantsHint && (
         <div className="flex flex-wrap items-end gap-2">
           <div className="min-w-[14rem] flex-1">
-            <label htmlFor={`${inputId}-url`} className="label">
+            <label htmlFor={`${inputId}-url`} className="field-label">
               …or paste your profile photo link
             </label>
             <input
@@ -150,39 +201,22 @@ export function HintPicker({
               }}
             />
           </div>
-          <button type="button" className="btn btn-sm" onClick={() => void loadUrl()} disabled={busy || !url.trim()}>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline"
+            onClick={() => void loadUrl()}
+            disabled={busy || !url.trim()}
+          >
             {busy ? 'Working…' : 'Use this'}
           </button>
         </div>
       )}
 
-      {busy && !value && <p className="mono-chip text-ink-soft">reading colours…</p>}
+      {busy && !value && <p className="text-xs text-ink-soft">reading colours…</p>}
       {error && (
-        <p role="alert" className="border-[2px] border-ink bg-punch px-3 py-2 text-sm text-paper">
+        <p role="alert" className="alert-error">
           {error}
         </p>
-      )}
-
-      {value && (
-        <div className="flex flex-col gap-3">
-          <PaletteCollage colors={value.palette.colors} compact={compact} />
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="mono-chip text-ink-soft">
-              {value.palette.colors.length} colours · dominant{' '}
-              {Math.round(value.palette.weight * 100)}% of the image
-            </p>
-            <button
-              type="button"
-              className="btn btn-sm"
-              onClick={() => {
-                onChange(null);
-                setError(null);
-              }}
-            >
-              Remove
-            </button>
-          </div>
-        </div>
       )}
     </div>
   );

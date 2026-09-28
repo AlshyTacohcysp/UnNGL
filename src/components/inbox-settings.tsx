@@ -119,9 +119,9 @@ export function InboxSettings({
         </div>
       </div>
 
-      {saved && <p className="mono-chip mt-3 text-ink-soft">{saved}</p>}
+      {saved && <p className="font-mono text-[0.68rem] mt-3 text-ink-soft">{saved}</p>}
       {error && (
-        <p role="alert" className="mt-3 border-[2.5px] border-ink bg-punch px-3 py-2 text-paper">
+        <p role="alert" className="mt-3 border-0 bg-coral px-3 py-2 text-white">
           {error}
         </p>
       )}

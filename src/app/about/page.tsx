@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function AboutPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-16">
-      <p className="stamp">why</p>
+      <p className="pill pill-outline">why</p>
       <h1 className="display-lg mt-4">A free alternative, done honestly</h1>
 
       <div className="prose-unngl mt-8">
@@ -108,7 +108,7 @@ export default function AboutPage() {
       </div>
 
       <div className="mt-10 flex flex-wrap gap-3">
-        <Link href="/login" className="btn btn-punch">
+        <Link href="/login" className="btn btn-primary">
           Get a link
         </Link>
         <a
@@ -124,7 +124,7 @@ export default function AboutPage() {
         </a>
       </div>
 
-      <p className="mono-chip mt-8 text-ink-soft">
+      <p className="font-mono text-[0.68rem] mt-8 text-ink-soft">
         palette v{ALGORITHM_VERSION} · not affiliated with NGL
       </p>
     </div>

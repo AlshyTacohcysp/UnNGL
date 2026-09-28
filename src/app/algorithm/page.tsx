@@ -40,7 +40,7 @@ export default function AlgorithmPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-16">
       <header>
-        <p className="stamp">public spec</p>
+        <p className="pill pill-outline">public spec</p>
         <h1 className="display-lg mt-4">The UnNGL palette algorithm</h1>
         <p className="serif-accent mt-3 text-2xl leading-snug">
           Version {ALGORITHM_VERSION}. If you can read this page and write some code, you can
@@ -81,7 +81,7 @@ export default function AlgorithmPage() {
         <div className="mt-4 overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-[2.5px] border-ink bg-paper-2 text-left">
+              <tr className="border-0 bg-surface-sunk text-left">
                 <th className="p-2">name</th>
                 <th className="p-2">value</th>
                 <th className="p-2">meaning</th>
@@ -89,8 +89,8 @@ export default function AlgorithmPage() {
             </thead>
             <tbody>
               {CONSTANTS.map(([name, value, meaning]) => (
-                <tr key={name} className="border-[2.5px] border-ink">
-                  <td className="mono-chip p-2 align-top">{name}</td>
+                <tr key={name} className="border-0">
+                  <td className="font-mono text-[0.68rem] p-2 align-top">{name}</td>
                   <td className="p-2 align-top font-semibold">{value}</td>
                   <td className="p-2 align-top text-ink-soft">{meaning}</td>
                 </tr>
@@ -132,7 +132,7 @@ export default function AlgorithmPage() {
           Each sample is converted from sRGB to OKLab (Björn Ottosson, 2020). Samples with
           alpha below {MIN_ALPHA} are discarded entirely. Every remaining sample gets a weight:
         </p>
-        <pre className="mono-chip overflow-x-auto border-[2.5px] border-ink bg-ink p-3 text-paper">
+        <pre className="font-mono text-[0.68rem] overflow-x-auto border-0 bg-ink p-3 text-white">
           {`w = alpha * (CHROMA_FLOOR + (1 - CHROMA_FLOOR) * min(1, C / CHROMA_REF))`}
         </pre>
         <p>
@@ -177,7 +177,7 @@ export default function AlgorithmPage() {
           A palette is serialised with fixed key order and a fixed array length, so it hashes
           identically forever:
         </p>
-        <pre className="mono-chip overflow-x-auto border-[2.5px] border-ink bg-ink p-3 text-paper">
+        <pre className="font-mono text-[0.68rem] overflow-x-auto border-0 bg-ink p-3 text-white">
           {'{"v":"1.0.0","colors":["#a12247","#238782","#e4ba9e","#645566","#bc696d","#89a392"],"weight":0.53}'}
         </pre>
         <p>
@@ -265,7 +265,7 @@ export default function AlgorithmPage() {
       </section>
 
       <p className="mt-12 text-center">
-        <Link href="/login" className="btn btn-acid">
+        <Link href="/login" className="btn btn-outline">
           Try it with your own photo →
         </Link>
       </p>

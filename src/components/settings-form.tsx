@@ -226,7 +226,7 @@ export function SettingsForm({
 
         <div className="mt-4 flex flex-wrap gap-2">
           {hint && (
-            <button type="button" className="btn btn-sm btn-acid" disabled={busy} onClick={saveAvatar}>
+            <button type="button" className="btn btn-sm btn-outline" disabled={busy} onClick={saveAvatar}>
               {busy ? 'Saving…' : 'Save this palette'}
             </button>
           )}
@@ -244,7 +244,7 @@ export function SettingsForm({
         {email ? (
           <p className="mt-3 flex flex-wrap items-center gap-2">
             <span className="font-semibold">{email}</span>
-            <span className={`stamp ${verified ? 'bg-acid!' : 'bg-sun!'}`}>
+            <span className={`pill pill-outline ${verified ? 'bg-amber!' : 'bg-amber!'}`}>
               {verified ? 'verified' : 'unverified'}
             </span>
           </p>
@@ -297,7 +297,7 @@ export function SettingsForm({
             </div>
             <button
               type="button"
-              className="btn btn-sm btn-acid"
+              className="btn btn-sm btn-outline"
               disabled={busy || code.length !== 6}
               onClick={confirmEmail}
             >
@@ -311,20 +311,23 @@ export function SettingsForm({
       </section>
 
       {/* ---------------- danger ---------------- */}
-      <section className="card border-punch p-5">
+      <section
+        className="rounded-3xl p-5"
+        style={{ background: 'color-mix(in oklab, var(--color-coral) 12%, var(--color-surface))' }}
+      >
         <h2 className="text-xl">Delete this account</h2>
         <p className="mt-2 text-ink-soft">
           {inboxCount} inbox{inboxCount === 1 ? '' : 'es'}, every message in them, your stored
           photos and your sessions. Gone immediately, with no copy anywhere else.
         </p>
-        <button type="button" className="btn btn-sm btn-punch mt-4" disabled={busy} onClick={deleteAccount}>
+        <button type="button" className="btn btn-sm btn-danger mt-4" disabled={busy} onClick={deleteAccount}>
           Delete my account
         </button>
       </section>
 
-      {saved && <p className="mono-chip">{saved}</p>}
+      {saved && <p className="font-mono text-[0.68rem]">{saved}</p>}
       {error && (
-        <p role="alert" className="border-[2.5px] border-ink bg-punch px-3 py-2 text-paper">
+        <p role="alert" className="border-0 bg-coral px-3 py-2 text-white">
           {error}
         </p>
       )}

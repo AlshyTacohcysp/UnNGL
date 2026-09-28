@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export default function TermsPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-16">
-      <p className="stamp">the small print</p>
+      <p className="pill pill-outline">the small print</p>
       <h1 className="display-lg mt-4">Terms</h1>
 
       <div className="prose-unngl mt-8">
@@ -77,7 +77,7 @@ export default function TermsPage() {
         </p>
       </div>
 
-      <p className="mono-chip mt-10 text-ink-soft">
+      <p className="font-mono text-[0.68rem] mt-10 text-ink-soft">
         questions? <a className="underline" href={`mailto:${config.contactEmail}`}>{config.contactEmail}</a>
       </p>
     </div>
