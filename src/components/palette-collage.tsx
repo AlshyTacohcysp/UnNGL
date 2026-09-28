@@ -19,6 +19,7 @@
 import { isLight } from '@/lib/palette/client';
 import { paletteHash } from '@/lib/palette/extract';
 import { cn } from '@/lib/cn';
+import { Drop } from './palette-strip';
 
 export interface CollapsedPalette {
   colors: string[];
@@ -137,21 +138,18 @@ export function PaletteCollage({
   );
 }
 
-/** Compact strip for lists and avatars. */
-export function PaletteBars({
-  colors,
-  className,
-  height = 14,
-}: {
-  colors: string[];
-  className?: string;
-  height?: number;
-}) {
+/**
+ * A compact row of drops, for lists and headers. The same silhouettes as
+ * the full-size version, so a palette looks like itself at every scale.
+ */
+export function PaletteBars({ colors, className, height = 18 }: { colors: string[]; className?: string; height?: number }) {
   const six = normalize(colors);
   return (
-    <div className={cn('flex overflow-hidden rounded-full', className)} style={{ height }} aria-hidden>
+    <div className={cn('flex items-end gap-0.5', className)} style={{ height }} aria-hidden>
       {six.map((hex, i) => (
-        <div key={`${hex}-${i}`} className="flex-1" style={{ background: hex }} />
+        <span key={`${hex}-${i}`} className="block h-full min-w-0 flex-1">
+          <Drop color={hex} index={i} />
+        </span>
       ))}
     </div>
   );

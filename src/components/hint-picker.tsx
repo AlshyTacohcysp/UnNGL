@@ -16,7 +16,7 @@
 
 import { useCallback, useId, useRef, useState } from 'react';
 import { fetchRemoteImage, prepareImage, type PreparedImage } from '@/lib/palette/client';
-import { PalettePill } from './palette-strip';
+import { PaletteDrops } from './palette-strip';
 import { PALETTE_SIZE } from '@/lib/palette/extract';
 
 export interface HintValue {
@@ -125,7 +125,7 @@ export function HintPicker({
         </span>
       </div>
 
-      {value && <PalettePill colors={value.palette.colors} className={compact ? 'h-6' : undefined} />}
+      {value && <PaletteDrops colors={value.palette.colors} className={compact ? 'h-9' : undefined} />}
 
       {value && (
         <div className="flex flex-wrap items-center gap-2">
