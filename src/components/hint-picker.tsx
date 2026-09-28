@@ -16,7 +16,7 @@
 
 import { useCallback, useId, useRef, useState } from 'react';
 import { fetchRemoteImage, prepareImage, type PreparedImage } from '@/lib/palette/client';
-import { PaletteDrops } from './palette-strip';
+import { PaletteStrip } from './palette-strip';
 import { PALETTE_SIZE } from '@/lib/palette/extract';
 
 export interface HintValue {
@@ -101,7 +101,7 @@ export function HintPicker({
         <span className="flex items-center gap-2.5">
           <span
             className={`relative block h-6 w-11 shrink-0 rounded-full transition-colors ${
-              wantsHint || value ? 'bg-teal' : 'bg-line'
+              wantsHint || value ? 'bg-ink' : 'bg-line'
             }`}
           >
             <button
@@ -113,8 +113,8 @@ export function HintPicker({
                 if (wantsHint || value) clear();
                 else setWantsHint(true);
               }}
-              className={`absolute top-0.5 left-0.5 block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
-                wantsHint || value ? 'translate-x-5' : ''
+              className={`absolute top-0.5 left-0.5 block h-5 w-5 rounded-full bg-surface shadow-sm transition-transform ${
+                wantsHint || value ? 'translate-x-5 bg-amber' : ''
               }`}
             />
           </span>
@@ -125,7 +125,7 @@ export function HintPicker({
         </span>
       </div>
 
-      {value && <PaletteDrops colors={value.palette.colors} className={compact ? 'h-9' : undefined} />}
+      {value && <PaletteStrip colors={value.palette.colors} className={compact ? 'h-3' : undefined} />}
 
       {value && (
         <div className="flex flex-wrap items-center gap-2">

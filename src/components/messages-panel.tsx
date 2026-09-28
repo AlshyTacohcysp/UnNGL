@@ -15,7 +15,7 @@
  */
 
 import { useState, useTransition } from 'react';
-import { PaletteBlobs } from './palette-strip';
+import { PalettePanel } from './palette-strip';
 
 export interface MessageView {
   id: string;
@@ -125,7 +125,14 @@ export function MessagesPanel({
                 <div className="mt-5">
                   {m.hint ? (
                     <>
-                      <PaletteBlobs colors={m.hint.colors} />
+                      {/* The chip sits ON the panel, the way the mockup
+                          does — it belongs to the colours, not to the card. */}
+                      <div className="relative">
+                        <PalettePanel colors={m.hint.colors} />
+                        <span className="absolute bottom-2 left-2.5 rounded-full border border-line bg-surface px-3 py-1 text-xs font-semibold text-ink shadow-sm">
+                          Do you recognise these colours?
+                        </span>
+                      </div>
                       <p className="mt-3 text-sm text-ink-soft">
                         {m.hint.verified
                           ? 'Recomputed on our server from the original photo, and it matched. The photo itself was deleted.'
@@ -144,11 +151,6 @@ export function MessagesPanel({
                 </div>
 
                 <div className="mt-5 flex flex-wrap items-center gap-2">
-                  {m.hint && (
-                    <span className="pill pill-outline">
-                      Do you recognise these colours?
-                    </span>
-                  )}
                   <button
                     type="button"
                     className="btn btn-sm btn-quiet ml-auto"

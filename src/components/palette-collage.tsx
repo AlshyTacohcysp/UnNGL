@@ -19,7 +19,6 @@
 import { isLight } from '@/lib/palette/client';
 import { paletteHash } from '@/lib/palette/extract';
 import { cn } from '@/lib/cn';
-import { Drop } from './palette-strip';
 
 export interface CollapsedPalette {
   colors: string[];
@@ -40,22 +39,19 @@ interface Props {
   compact?: boolean;
 }
 
-/** Fixed, deterministic — see the note above. */
-const BLOBS = [
-  { color: 0, left: -14, top: -30, size: 72, shape: 0 },
-  { color: 2, left: 26, top: -22, size: 64, shape: 1 },
-  { color: 4, left: 58, top: 6, size: 66, shape: 2 },
-  { color: 1, left: 6, top: 34, size: 58, shape: 3 },
-  { color: 5, left: 46, top: 44, size: 62, shape: 4 },
+/**
+ * The same four anchored circles the inbox uses, in the same slots, so a
+ * palette looks like itself on the algorithm page and in the inbox. The
+ * offsets are percentages of the panel's own box here rather than the rem
+ * values `PalettePanel` uses, because this card is narrower and its circles
+ * are smaller.
+ */
+const SLOTS = [
+  { color: 1, left: -18, top: 6, size: 62 },
+  { color: 2, left: 30, top: -34, size: 58 },
+  { color: 3, left: 66, top: -14, size: 60 },
+  { color: 4, left: 44, top: 44, size: 64 },
 ] as const;
-
-const SHAPES = [
-  '58% 42% 47% 53% / 52% 44% 56% 48%',
-  '44% 56% 38% 62% / 61% 39% 61% 39%',
-  '62% 38% 55% 45% / 45% 58% 42% 55%',
-  '38% 62% 61% 39% / 55% 41% 59% 45%',
-  '52% 48% 42% 58% / 43% 57% 43% 57%',
-];
 
 export function PaletteCollage({
   colors,
@@ -81,18 +77,16 @@ export function PaletteCollage({
         aria-label={`Palette: ${six.join(' ')}`}
       >
         <span className="absolute inset-0 block" style={{ background: six[0] }} />
-        {BLOBS.map((b, i) => (
+        {SLOTS.map((b, i) => (
           <span
             key={i}
             aria-hidden
-            className="absolute block"
+            className="absolute block aspect-square rounded-full"
             style={{
               left: `${b.left}%`,
               top: `${b.top}%`,
               width: `${b.size}%`,
-              height: `${b.size}%`,
               background: six[b.color],
-              borderRadius: SHAPES[b.shape],
             }}
           />
         ))}
@@ -135,23 +129,6 @@ export function PaletteCollage({
         </figcaption>
       )}
     </figure>
-  );
-}
-
-/**
- * A compact row of drops, for lists and headers. The same silhouettes as
- * the full-size version, so a palette looks like itself at every scale.
- */
-export function PaletteBars({ colors, className, height = 18 }: { colors: string[]; className?: string; height?: number }) {
-  const six = normalize(colors);
-  return (
-    <div className={cn('flex items-end gap-0.5', className)} style={{ height }} aria-hidden>
-      {six.map((hex, i) => (
-        <span key={`${hex}-${i}`} className="block h-full min-w-0 flex-1">
-          <Drop color={hex} index={i} />
-        </span>
-      ))}
-    </div>
   );
 }
 

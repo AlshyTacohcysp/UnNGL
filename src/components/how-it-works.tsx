@@ -12,7 +12,7 @@
 
 import Link from 'next/link';
 import { BlobCollage, CollageHeader, type Blob } from './blob-collage';
-import { PaletteBlobs, PaletteDots } from './palette-strip';
+import { PaletteDisc, PaletteDots } from './palette-strip';
 import { SAMPLE_LIST } from '@/lib/samples.generated';
 
 const GITHUB = 'https://github.com/AlshyTacohcysp/UnNGL';
@@ -41,11 +41,11 @@ const GUARANTEES = [
 
 /** A small collage for the header — the send page's, pulled in tighter. */
 const HEADER_BLOBS: Blob[] = [
-  { color: 'var(--color-teal)', left: -16, top: -40, size: 70, shape: 1, z: 2 },
-  { color: 'var(--color-amber)', left: 26, top: -50, size: 66, shape: 0, z: 1 },
-  { color: 'var(--color-indigo)', left: 62, top: -36, size: 62, shape: 2, z: 2 },
-  { color: 'var(--color-pink)', left: 8, top: 26, size: 48, shape: 3, z: 1 },
-  { color: 'var(--color-coral)', left: 70, top: 34, size: 44, shape: 4, z: 3 },
+  { color: 'var(--color-teal)', left: -16, top: -40, size: 70, z: 2 },
+  { color: 'var(--color-amber)', left: 26, top: -50, size: 66, z: 1 },
+  { color: 'var(--color-indigo)', left: 62, top: -36, size: 62, z: 2 },
+  { color: 'var(--color-pink)', left: 8, top: 26, size: 48, z: 1 },
+  { color: 'var(--color-coral)', left: 70, top: 34, size: 44, z: 3 },
 ];
 
 export function HowItWorks() {
@@ -72,46 +72,33 @@ export function HowItWorks() {
       <section className="mx-auto -mt-10 max-w-4xl px-4 sm:px-6">
         <div className="card p-6 sm:p-9">
           <div className="grid items-center gap-6 sm:grid-cols-[1fr_auto_1fr_auto_1fr]">
-            {/* in: the photo, on the sender's device */}
+            {/* in: the photo, on the sender's device. A circle with a
+                person in it, the way the mockup draws it. */}
             <div className="text-center">
-              <div className="mx-auto w-24 overflow-hidden rounded-2xl">
-                <BlobCollage
-                  blobs={[
-                    { color: 'var(--color-sky)', left: -20, top: -20, size: 90, shape: 0 },
-                    { color: 'var(--color-coral)', left: 40, top: 30, size: 80, shape: 2 },
-                    { color: 'var(--color-amber)', left: 10, top: 60, size: 60, shape: 1 },
-                  ]}
-                />
-                <div className="aspect-square w-full bg-sky" />
-              </div>
-              <p className="field-label mt-3">1 · A photo</p>
-              <p className="text-xs text-ink-soft">Read in the browser, never uploaded</p>
+              <span className="relative mx-auto block h-16 w-16 overflow-hidden rounded-full border-2 border-ink bg-[#cbb49a]">
+                <span className="absolute left-1/2 top-[22%] block h-[34%] w-[34%] -translate-x-1/2 rounded-full bg-[#8d6e52]" />
+                <span className="absolute left-1/2 -bottom-[42%] block h-[72%] w-[72%] -translate-x-1/2 rounded-full bg-[#8d6e52]" />
+              </span>
+              <p className="field-label mt-3">Photo</p>
+              <p className="text-xs text-ink-soft">Read once</p>
             </div>
 
-            <span aria-hidden className="hidden text-2xl text-ink-faint sm:block">
-              →
-            </span>
+            <span aria-hidden className="hidden h-px w-8 bg-line sm:block" />
 
             {/* middle: the six colours, the only thing that travels */}
             <div className="text-center">
-              {sample ? (
-                <PaletteDots colors={sample.colors} className="mx-auto scale-125" />
-              ) : null}
-              <p className="field-label mt-3">2 · Six colours</p>
-              <p className="text-xs text-ink-soft">The entire hint. That is all that is sent.</p>
+              {sample ? <PaletteDots colors={sample.colors} className="mx-auto" /> : null}
+              <p className="field-label mt-3">Palette</p>
+              <p className="text-xs text-ink-soft">6 colours</p>
             </div>
 
-            <span aria-hidden className="hidden text-2xl text-ink-faint sm:block">
-              →
-            </span>
+            <span aria-hidden className="hidden h-px w-8 bg-line sm:block" />
 
-            {/* out: the message and the palette, together, for the recipient */}
+            {/* out: the message, carrying the palette with it */}
             <div className="text-center">
-              {sample ? (
-                <PaletteBlobs colors={sample.colors} className="h-20 sm:h-24" />
-              ) : null}
-              <p className="field-label mt-3">3 · A message</p>
-              <p className="text-xs text-ink-soft">“Do you recognise these colours?”</p>
+              {sample ? <PaletteDisc colors={sample.colors} className="mx-auto" size={64} /> : null}
+              <p className="field-label mt-3">Message</p>
+              <p className="text-xs text-ink-soft">Palette attached</p>
             </div>
           </div>
         </div>

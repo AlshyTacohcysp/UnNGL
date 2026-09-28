@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { Composer } from '@/components/composer';
 import { CollageHeader } from '@/components/blob-collage';
-import { PaletteBlobs } from '@/components/palette-strip';
+import { PalettePanel } from '@/components/palette-strip';
 import { currentUserId } from '@/lib/auth';
 import { config } from '@/lib/config';
 import { getInboxByHandleOrSlug } from '@/lib/inbox';
@@ -94,7 +94,7 @@ export default async function ComposePage({ params }: Params) {
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
             {SAMPLE_LIST.slice(0, 3).map((p) => (
               <div key={p.hash} className="card p-3">
-                <PaletteBlobs colors={p.colors} className="h-20" />
+                <PalettePanel colors={p.colors} className="h-20" />
               </div>
             ))}
           </div>
