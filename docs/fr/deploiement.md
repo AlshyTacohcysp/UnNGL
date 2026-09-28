@@ -22,12 +22,21 @@ f tourner UnNGL.
 Éventuellement, une fois le HTTPS définitif sur le domaine :
 
 ```bash
-ENABLE_HSTS=1
+ENABLE_HSTS=1 npm run build
 ```
 
 HSTS indique aux navigateurs de refuser le texte brut pendant deux ans. Ne
 l'activez pas pendant vos réglages — les navigateurs ne vous laisseront plus
 revenir en arrière.
+
+> **`ENABLE_HSTS` se règle à la compilation, pas à l'exécution.** `next.config`
+> ne fait pas partie de la sortie standalone : le mettre dans `.env` et
+> redémarrer ne produit rien du tout, silencieusement. Il faut le définir au
+> moment du build. Le serveur sait avec quoi il a été compilé et le dit au
+> démarrage, donc vous pouvez voir ce qui s'est réellement passé. Avec Docker :
+> ```bash
+> docker build --build-arg ENABLE_HSTS=1 -t unngl:latest .
+> ```
 
 ---
 
@@ -242,7 +251,7 @@ redémarre pas, restaurez l'instantané.
 - [ ] `SESSION_SECRET` aléatoire, ≥ 32 octets, hors de git
 - [ ] `NEXT_PUBLIC_ORIGIN` en `https://`
 - [ ] Le TLS se termine devant ; HTTP redirige vers HTTPS
-- [ ] `ENABLE_HSTS=1` une fois le domaine définitif
+- [ ] Rebuild avec `ENABLE_HSTS=1` une fois le domaine définitif (à la compilation)
 - [ ] `TRUSTED_PROXY=1` **uniquement** si un proxy que vous contrôlez est le
       seul chemin d'accès
 - [ ] `EXPOSE_DEV_CODES` non défini

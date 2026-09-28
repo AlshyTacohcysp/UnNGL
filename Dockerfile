@@ -27,6 +27,12 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # The build must not need SESSION_SECRET; the server enforces it at runtime.
 ENV SESSION_SECRET=build-time-placeholder
+# HSTS is a build-time setting: next.config is not present in the standalone
+# output, so an ENABLE_HSTS value passed only at runtime is silently ignored.
+# Once the domain is permanently HTTPS, rebuild with:
+#   docker build --build-arg ENABLE_HSTS=1 -t unngl:latest .
+ARG ENABLE_HSTS=0
+ENV ENABLE_HSTS=${ENABLE_HSTS}
 RUN npm run build
 
 FROM node:22-alpine AS runner

@@ -62,9 +62,18 @@ function isPlausibleIp(value: string): boolean {
  * Same-origin check for state-changing requests.
  *
  * The session cookie is SameSite=Lax, which already stops a cross-site POST
- * from carrying it. This is the belt to that braces: a mutating request whose
+ * from carrying it. This is the belt to those braces: a mutating request whose
  * Origin is present and is not us is refused outright, which also closes the
  * gap if the app is ever embedded or proxied in a way that weakens SameSite.
+ *
+ * The host is compared against the request's own Host header rather than against
+ * a configured constant, which is what the web platform means by "same origin"
+ * and what keeps this working behind a proxy, on a custom domain, or on a LAN
+ * address that was never in the .env file.
+ *
+ * The scheme is a separate, stricter test. A browser on an https page never
+ * sends an `http` Origin to it, so an http Origin reaching a site configured for
+ * https is either a confused client or something that does not belong here.
  */
 export async function isSameOrigin(req: Request): Promise<boolean> {
   const origin = req.headers.get('origin');
@@ -73,14 +82,20 @@ export async function isSameOrigin(req: Request): Promise<boolean> {
   if (!origin) return true;
   const host = req.headers.get('host');
   if (!host) return false;
+  let o: URL;
   try {
-    const o = new URL(origin);
-    return o.protocol === 'https:' || o.protocol === 'http:'
-      ? o.host === host
-      : false;
+    o = new URL(origin);
   } catch {
     return false;
   }
+  if (o.protocol !== 'https:' && o.protocol !== 'http:') return false;
+
+  // A downgrade against the configured scheme is refused even when the host
+  // matches, so `http://unngl.example` can never authorise anything on an
+  // instance that is meant to be https-only.
+  if (config.origin.startsWith('https://') && o.protocol !== 'https:') return false;
+
+  return o.host === host;
 }
 
 export async function userAgent(): Promise<string> {

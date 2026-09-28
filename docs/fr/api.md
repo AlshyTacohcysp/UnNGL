@@ -19,9 +19,11 @@ Les messages d'erreur sont écrits pour la personne qui les lit, pas pour un
 fichier de journal.
 
 **Same-origin sur toute mutation.** Toutes les routes non-`GET` passent par
-`route()` dans `src/lib/http.ts`, qui compare l'en-tête `Origin` à
-`NEXT_PUBLIC_ORIGIN` et renvoie `403 {"ok":false,"error":"Cross-origin request
-refused."}` en cas de divergence. Ce contrôle est centralisé : une nouvelle route
+`route()` dans `src/lib/http.ts`, qui exige que l'hôte de l'en-tête `Origin`
+corresponde à l'en-tête `Host` de la requête et renvoie `403
+{"ok":false,"error":"Cross-origin request refused."}` en cas de divergence. Sur
+une instance configurée en HTTPS, une origine `http` est refusée même si l'hôte
+correspond. Ce contrôle est centralisé : une nouvelle route
 ne peut pas l'oublier. Les requêtes sans aucun en-tête `Origin` sont autorisées —
 curl, les liens dans les e-mails et certains robots n'en envoient pas, et les
 refuser casserait le produit sans ajouter la moindre sécurité.

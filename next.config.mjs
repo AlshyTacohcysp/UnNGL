@@ -44,6 +44,15 @@ const nextConfig = {
   poweredByHeader: false,
   output: 'standalone',
 
+  // HSTS is decided at BUILD time, because next.config is not present in the
+  // standalone output — an ENABLE_HSTS value exported only at runtime is
+  // silently ignored, which is the sort of thing an operator assumes worked.
+  // Bake the decision so the server can still read it at runtime and warn about
+  // a nonsensical combination (HSTS on a plain-HTTP origin, or vice versa).
+  env: {
+    UNNGL_HSTS: process.env.ENABLE_HSTS === '1' ? '1' : '0',
+  },
+
   // Never trace runtime state into the standalone output.
   //
   // Next's file tracer follows anything referenced from the app, and the

@@ -18,7 +18,7 @@ déployer.
 |---|---|
 | `npm audit` (production) | **0 vulnérabilité** |
 | `npm audit` (y compris le développement) | **0 vulnérabilité** |
-| Suite de tests | **59 réussis** (18 algorithme, 41 régression sécurité) |
+| Suite de tests | **64 réussis** (18 algorithme, 46 régression sécurité) |
 | TypeScript | propre, `strict` |
 | En-têtes de sécurité | CSP, HSTS (optionnel), `X-Frame-Options`, COOP, CORP, `nosniff`, `Referrer-Policy`, `Permissions-Policy` |
 | Dépendances de runtime | 3 (`next`, `react`, `react-dom`, plus `zod`) |
@@ -142,8 +142,18 @@ prise de contrôle de compte.
 ### 4. CSRF — contrôle same-origin centralisé
 
 `route()` enveloppe **tous** les gestionnaires. Toute méthode autre que `GET`,
-`HEAD` ou `OPTIONS` doit faire correspondre `Origin` à `NEXT_PUBLIC_ORIGIN`, ou
-bien reçoit `403 {"ok":false,"error":"Cross-origin request refused."}`.
+`HEAD` ou `OPTIONS` doit voir l'hôte de son `Origin` correspondre à l'en-tête
+`Host` de la requête, ou bien reçoit `403 {"ok":false,"error":"Cross-origin
+request refused."}`. L'hôte est comparé à la requête elle-même plutôt qu'à une
+constante configurée — c'est ce que signifie « same origin » pour la plateforme
+web, et cela continue de fonctionner derrière un proxy ou sur un nom de domaine
+personnalisé qui n'a jamais figuré dans le `.env`.
+
+Le schéma est vérifié séparément et de façon plus stricte : quand l'instance
+est configurée pour HTTPS, une origine `http` est refusée même si l'hôte
+correspond, si bien que `http://unngl.example` ne peut jamais autoriser quoi que
+ce soit sur une instance https. Un navigateur sur une page https n'envoie jamais
+une origine `http` : cela ne coûte donc rien de légitime.
 
 Le centralisation est l'essentiel. Un contrôle par route est un contrôle que
 quelqu'un oublie sur la route qu'il ajoute à 2h du matin. Il n'y a qu'un seul
@@ -385,7 +395,7 @@ lecture. Voir [architecture](architecture.md#les-dépendances).
 
 ## Tests
 
-`tests/security.test.ts` contient 41 tests de régression. Chacun correspond soit
+`tests/security.test.ts` contient 46 tests de régression. Chacun correspond soit
 à un vrai défaut ayant existé, soit à une attaque que la conception doit refuser.
 Ils sont écrits pour échouer bruyamment si la protection est un jour retirée :
 

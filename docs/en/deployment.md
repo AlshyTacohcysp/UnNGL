@@ -20,11 +20,20 @@ container and copy a file, you can run UnNGL.
 Optionally, once HTTPS is permanent on the domain:
 
 ```bash
-ENABLE_HSTS=1
+ENABLE_HSTS=1 npm run build
 ```
 
 HSTS tells browsers to refuse plaintext for two years. Do not enable it while
 still setting things up — browsers will not let you back out.
+
+> **`ENABLE_HSTS` is a build-time setting, not a runtime one.** `next.config` is
+> not part of the standalone output, so putting it in `.env` and restarting does
+> nothing at all, silently. It has to be set when you build. The server knows
+> what it was compiled with and says so at boot, so you can tell which happened.
+> With Docker:
+> ```bash
+> docker build --build-arg ENABLE_HSTS=1 -t unngl:latest .
+> ```
 
 ---
 
@@ -225,7 +234,7 @@ snapshot.
 - [ ] `SESSION_SECRET` random, ≥ 32 bytes, not in git
 - [ ] `NEXT_PUBLIC_ORIGIN` is `https://`
 - [ ] TLS terminates in front; HTTP redirects to HTTPS
-- [ ] `ENABLE_HSTS=1` once the domain is permanent
+- [ ] Rebuilt with `ENABLE_HSTS=1` once the domain is permanent (build-time)
 - [ ] `TRUSTED_PROXY=1` **only** if a proxy you control is the sole path in
 - [ ] `EXPOSE_DEV_CODES` unset
 - [ ] `HEALTH_DETAIL` unset

@@ -16,7 +16,7 @@ Read the [threat model](#threat-model) before the [controls](#controls), and the
 |---|---|
 | `npm audit` (production) | **0 vulnerabilities** |
 | `npm audit` (including dev) | **0 vulnerabilities** |
-| Test suite | **59 passing** (18 algorithm, 41 security regression) |
+| Test suite | **64 passing** (18 algorithm, 46 security regression) |
 | TypeScript | clean, `strict` |
 | Security headers | CSP, HSTS (opt-in), `X-Frame-Options`, COOP, CORP, `nosniff`, `Referrer-Policy`, `Permissions-Policy` |
 | Runtime dependencies | 3 (`next`, `react`, `react-dom`, plus `zod`) |
@@ -130,8 +130,17 @@ the server for the code". Treat it as a hypothetical account takeover.
 ### 4. CSRF — centralised same-origin enforcement
 
 `route()` wraps **every** handler. Any method other than `GET`, `HEAD` or
-`OPTIONS` must match `Origin` against `NEXT_PUBLIC_ORIGIN` or gets
-`403 {"ok":false,"error":"Cross-origin request refused."}`.
+`OPTIONS` must have an `Origin` whose host matches the request's own `Host`
+header, or gets `403 {"ok":false,"error":"Cross-origin request refused."}`. The
+host is compared against the request rather than a configured constant — that is
+what the web platform means by same origin, and it keeps working behind a proxy
+or on a custom domain that was never in the `.env` file.
+
+The scheme is checked separately and more strictly: when the instance is
+configured for HTTPS, an `http` Origin is refused even if the host matches, so
+`http://unngl.example` can never authorise anything on an https-only instance. A
+browser on an https page never sends an `http` Origin to it, so this costs
+nothing legitimate.
 
 Centralising it is the point. A per-route check is a check someone forgets on
 the route they add at 2am. There is exactly one place to get wrong, and it has a
@@ -360,7 +369,7 @@ small enough to audit by reading. See
 
 ## Testing
 
-`tests/security.test.ts` holds 41 regression tests. Each corresponds either to a
+`tests/security.test.ts` holds 46 regression tests. Each corresponds either to a
 real defect that existed at some point, or to an attack the design must refuse.
 They are written to fail loudly if the protection is ever removed:
 

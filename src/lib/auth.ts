@@ -263,16 +263,30 @@ export function sessionCookieName(): string {
   return config.isProd ? SESSION_COOKIE_SECURE : SESSION_COOKIE;
 }
 
+/**
+ * The session token on this request, if any.
+ *
+ * The name has to come from sessionCookieName() and not from the constant: in
+ * production the cookie is `__Host-unngl_session`, and reading the plain
+ * `unngl_session` instead meant the server set a cookie it then never looked
+ * for. Every session in production was accepted at sign-in and rejected on the
+ * very next request — nobody could stay signed in. It stayed hidden because over
+ * plain HTTP the Secure cookie is not sent at all, so the failure only appears
+ * once you actually deploy behind TLS.
+ */
+async function sessionToken(): Promise<string | undefined> {
+  const store = await cookies();
+  return store.get(sessionCookieName())?.value;
+}
+
 /** The signed-in user for this request, or null. */
 export async function currentUser(): Promise<User | null> {
-  const store = await cookies();
-  const id = sessionUserId(store.get(SESSION_COOKIE)?.value);
+  const id = sessionUserId(await sessionToken());
   return id ? (findUserById(id) ?? null) : null;
 }
 
 export async function currentUserId(): Promise<string | null> {
-  const store = await cookies();
-  return sessionUserId(store.get(SESSION_COOKIE)?.value);
+  return sessionUserId(await sessionToken());
 }
 
 export function sessionCookieOptions() {

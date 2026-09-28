@@ -103,7 +103,7 @@ le relancer sans risque.
 | `npm run dev` | serveur de développement avec rechargement à chaud, port 3000 |
 | `npm run build` | build de production |
 | `npm start` | serveur de production (sortie standalone si buildée, sinon `next start`) |
-| `npm test` | la suite de tests complète (59 tests) |
+| `npm test` | la suite de tests complète (64 tests) |
 | `npm run typecheck` | TypeScript, sans émission |
 | `npm run seed` | créer le compte et la boîte de démonstration |
 | `npm run samples` | régénérer les palettes d'exemple des pages marketing |

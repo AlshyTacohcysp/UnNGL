@@ -17,8 +17,10 @@ no versioning scheme, and no client library — the app is its own first consume
 Error messages are written for the person reading them, not for a log file.
 
 **Same-origin on every mutation.** All non-`GET` routes go through `route()` in
-`src/lib/http.ts`, which compares the `Origin` header to `NEXT_PUBLIC_ORIGIN` and
-returns `403 {"ok":false,"error":"Cross-origin request refused."}` on a mismatch.
+`src/lib/http.ts`, which requires the `Origin` host to match the request's own
+`Host` header and returns `403 {"ok":false,"error":"Cross-origin request
+refused."}` on a mismatch. On an https-configured instance an `http` Origin is
+refused even when the host matches.
 This is centralised, so a new route cannot forget it. Requests with no `Origin`
 header at all are allowed — curl, the links in emails, and some crawlers do not
 send one, and refusing them would break the product without adding security.

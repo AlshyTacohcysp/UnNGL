@@ -15,6 +15,45 @@ import { safeRedirectPath } from '../src/lib/redirect';
 import { isAllowedMediaUrl } from '../src/lib/media';
 
 /* ------------------------------------------------------------------ *
+ * Reading source files in assertions
+ * ------------------------------------------------------------------ */
+
+/**
+ * Read a source file with its comments stripped.
+ *
+ * Several tests below assert on how code *reads*, not on what it *says*, so a
+ * comment explaining the very thing being asserted would otherwise make the test
+ * pass or fail for the wrong reason. String literals are preserved, because
+ * 'https://x' contains something that looks like the start of a comment.
+ */
+function readCode(relative: string): string {
+  const { readFileSync } = require('node:fs') as typeof import('node:fs');
+  const src = readFileSync(new URL(relative, import.meta.url), 'utf8');
+  let out = '';
+  let i = 0;
+  let mode: 'code' | 'line' | 'block' | 'str' | 'tmpl' = 'code';
+  while (i < src.length) {
+    const c = src[i]!;
+    const next = src[i + 1]!;
+    if (mode === 'code') {
+      if (c === '/' && next === '/') { mode = 'line'; i += 2; continue; }
+      if (c === '/' && next === '*') { mode = 'block'; i += 2; continue; }
+      if (c === "'") mode = 'str';
+      else if (c === '`') mode = 'tmpl';
+      else if (c === '"') mode = 'str';
+      out += c; i++; continue;
+    }
+    if (mode === 'line') { if (c === '\n') { mode = 'code'; out += c; } i++; continue; }
+    if (mode === 'block') { if (c === '*' && next === '/') { mode = 'code'; i += 2; } else i++; continue; }
+    // inside a string or template
+    if (c === '\\') { out += c + next; i += 2; continue; }
+    if ((mode === 'str' && c === "'") || (mode === 'tmpl' && c === '`')) mode = 'code';
+    out += c; i++;
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------------ *
  * helpers: a minimal PNG writer, so we can forge hostile files
  * ------------------------------------------------------------------ */
 
@@ -352,11 +391,7 @@ describe('deployment invariants', () => {
     // DATABASE_PATH created .next/standalone/data/unngl.sqlite, and every
     // `npm run build` deleted .next. The instance came back healthy and empty,
     // with every message gone and nothing in the logs.
-    const { readFileSync } = await import('node:fs');
-    const start = readFileSync(
-      new URL('../scripts/start.mjs', import.meta.url),
-      'utf8',
-    );
+    const start = readCode('../scripts/start.mjs');
     expect(start).toMatch(/process\.env\.DATABASE_PATH\s*=\s*path\.join\(root,/);
     // ...and it must happen before the value is resolved against the root, or
     // the relative-path handling below never sees it.
@@ -369,11 +404,7 @@ describe('deployment invariants', () => {
     // `npx next start` resolves "next" from the registry when it is not installed
     // locally, so a checkout without node_modules silently downloaded and ran a
     // different major version of the framework than the app was built against.
-    const { readFileSync } = await import('node:fs');
-    const start = readFileSync(
-      new URL('../scripts/start.mjs', import.meta.url),
-      'utf8',
-    );
+    const start = readCode('../scripts/start.mjs');
     expect(start).not.toMatch(/spawnSync\(\s*'npx'/);
   });
 
@@ -381,20 +412,100 @@ describe('deployment invariants', () => {
     // It used to be a lazy getter: the server booted, every page rendered, and
     // the first person to try to sign in was told "something went wrong on our
     // side". A missing secret is an operator error and must read like one.
-    const { readFileSync } = await import('node:fs');
-    const check = readFileSync(
-      new URL('../src/lib/startup-check.ts', import.meta.url),
-      'utf8',
-    );
+    const check = readCode('../src/lib/startup-check.ts');
     expect(check).toMatch(/UnNGL cannot start: SESSION_SECRET is not set/);
     expect(check).toMatch(/openssl rand -base64 48/);
 
     // ...and it must be wired to something that actually runs at boot.
-    const instrumentation = readFileSync(
-      new URL('../src/instrumentation.ts', import.meta.url),
-      'utf8',
-    );
+    const instrumentation = readCode('../src/instrumentation.ts');
     expect(instrumentation).toMatch(/auditConfig\(\)/);
     expect(instrumentation).toMatch(/process\.exit\(1\)/);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Settings whose effect is decided at build time must say so
+ * ------------------------------------------------------------------ */
+
+describe('build-time settings', () => {
+  it('bakes the HSTS decision so the server can report it at boot', async () => {
+    // Regression, and a silent one: next.config is not part of the standalone
+    // output, so ENABLE_HSTS set only in the environment at runtime did nothing
+    // at all — no header, no warning. An operator would tick the box in .env and
+    // the hardening checklist would claim HSTS was on. It is now baked into
+    // UNNGL_HSTS at build time, so the running server can tell you which
+    // combination it was actually compiled with.
+    const cfg = readCode('../next.config.mjs');
+    expect(cfg).toMatch(/UNNGL_HSTS: process\.env\.ENABLE_HSTS === '1' \? '1' : '0'/);
+
+    const check = readCode('../src/lib/startup-check.ts');
+    expect(check).toMatch(/UNNGL_HSTS === '1'/);
+    // ...and the audit must actually have the HSTS checks the docs promise.
+    expect(check).toMatch(/HSTS is compiled in but NEXT_PUBLIC_ORIGIN/);
+    expect(check).toMatch(/HSTS is off/);
+  });
+});
+
+describe('runtime configuration is not inlined at build time', () => {
+  it('reads NEXT_PUBLIC_ORIGIN so a self-hoster can set their domain at deploy', async () => {
+    // Regression, and the worst one for a self-hosted app. Next.js rewrites the
+    // literal `process.env.NEXT_PUBLIC_ORIGIN` into a constant at build time —
+    // in the server bundle too. So an operator who set their domain in .env and
+    // restarted got every email link, OAuth callback and CSRF origin check
+    // still pointing at whatever was configured when the image was built, and
+    // the boot audit cheerfully confirmed the wrong value.
+    //
+    // The name has to be spelled as a computed key for that substitution not to
+    // apply. Assert the spelling, not just the intent: `process.env.NEXT_PUBLIC_
+    // ORIGIN` would look identical here and silently re-break it.
+    const cfg = readCode('../src/lib/config.ts');
+    expect(cfg).toMatch(/runtimeEnv\('NEXT_PUBLIC_' \+ 'ORIGIN'\)/);
+    expect(cfg).not.toMatch(/process\.env\.NEXT_PUBLIC_ORIGIN/);
+  });
+});
+
+describe('the session cookie is read under the name it is written', () => {
+  it('never reads the session from a hardcoded name', () => {
+    // The worst bug in this project's history, and it only existed in
+    // production. The cookie was written as `__Host-unngl_session` and read as
+    // `unngl_session`, so every session was accepted at sign-in and rejected on
+    // the very next request: nobody could stay signed in on a real deployment.
+    //
+    // It hid so well because over plain HTTP — which is how the test suite and
+    // every local run work — the Secure cookie is never sent at all, so the read
+    // path is never exercised. Only a real TLS run surfaces it.
+    const auth = readCode('../src/lib/auth.ts');
+    // The only permitted literal use of the constant is inside sessionCookieName.
+    const literals = auth.match(/store\.get\(['"][a-zA-Z_]+['"]\)/g) ?? [];
+    expect(literals).toEqual([]);
+    expect(auth).toMatch(/store\.get\(sessionCookieName\(\)\)/);
+  });
+
+  it('uses __Host- in production and a plain name in development', async () => {
+    const { sessionCookieName } = await import('../src/lib/auth');
+    // NODE_ENV is readonly on the typed ProcessEnv, and it is a string only.
+    const env = process.env as Record<string, string | undefined>;
+    const prev = env.NODE_ENV;
+    try {
+      env.NODE_ENV = 'production';
+      expect(sessionCookieName()).toBe('__Host-unngl_session');
+      env.NODE_ENV = 'development';
+      expect(sessionCookieName()).toBe('unngl_session');
+    } finally {
+      env.NODE_ENV = prev;
+    }
+  });
+});
+
+describe('same-origin refuses a scheme downgrade', () => {
+  it('rejects an http Origin on an https-configured instance', () => {
+    const http = readCode('../src/lib/http.ts');
+    // Host comparison alone let `http://unngl.example` authorise a request to
+    // `https://unngl.example` whenever the host matched. Not browser-exploitable
+    // on its own — a browser on an https page never sends an http Origin, and
+    // the session cookie is Secure — but the docs claimed a check the code did
+    // not perform, which is its own problem.
+    expect(http).toMatch(/config\.origin\.startsWith\('https:\/\/'\)/);
+    expect(http).toMatch(/o\.protocol !== 'https:'/);
   });
 });

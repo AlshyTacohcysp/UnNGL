@@ -24,6 +24,24 @@ function required(name: string, dflt: string): string {
 
 const ALLOW_INSECURE_DEFAULTS = bool(process.env.ALLOW_INSECURE_DEFAULTS, false);
 
+/**
+ * Read an environment variable without letting Next.js inline it at build time.
+ *
+ * Next rewrites the literal expression `process.env.NEXT_PUBLIC_ORIGIN` into a
+ * string constant during the build — in the server bundle as well as the
+ * client one. So a self-hoster who set their domain in .env and restarted got
+ * every email link, OAuth callback and CSRF origin check still pointing at
+ * whatever was configured when the image was built. It looked configured, it
+ * audited as configured, and it was wrong.
+ *
+ * The name is spelled as a computed key precisely so it does not match, which
+ * keeps the documented variable name working as a genuine runtime setting. This
+ * value is never needed in the browser, so nothing is lost by not inlining it.
+ */
+function runtimeEnv(name: string): string | undefined {
+  return (process.env as Record<string, string | undefined>)[name];
+}
+
 export const config = {
   get env() {
     return process.env.NODE_ENV ?? 'development';
@@ -31,9 +49,13 @@ export const config = {
   get isProd() {
     return process.env.NODE_ENV === 'production';
   },
-  /** Public origin, used for links in emails and OAuth redirects. */
+  /**
+   * Public origin: the site as users reach it. Used for links in emails, OAuth
+   * redirect URIs, and the same-origin check. Set it at runtime, in .env.
+   */
   get origin() {
-    return (process.env.NEXT_PUBLIC_ORIGIN ?? 'http://localhost:3000').replace(/\/+$/, '');
+    const raw = runtimeEnv('NEXT_PUBLIC_' + 'ORIGIN') ?? 'http://localhost:3000';
+    return raw.replace(/\/+$/, '');
   },
   get databasePath() {
     return process.env.DATABASE_PATH ?? path.join(process.cwd(), 'data', 'unngl.sqlite');
@@ -123,9 +145,6 @@ export const config = {
   },
   get retentionDays() {
     return Number(process.env.HINT_IMAGE_RETENTION_DAYS ?? 7);
-  },
-  get siteUrl() {
-    return process.env.NEXT_PUBLIC_SITE_URL ?? 'https://unngl.link';
   },
   get contactEmail() {
     return process.env.CONTACT_EMAIL ?? 'hello@unngl.link';

@@ -87,6 +87,27 @@ export function auditConfig(): void {
           'Secure and OAuth redirects will be plain HTTP.',
       );
     }
+
+    // HSTS is baked in at build time, so the running server cannot simply read
+    // ENABLE_HSTS: by the time it is running, next.config has been consumed by
+    // the build and the standalone output does not carry it. UNNGL_HSTS is the
+    // decision as it was actually compiled in, so these warnings describe the
+    // server that is running rather than the one that was configured.
+    const hsts = process.env.UNNGL_HSTS === '1';
+    if (hsts && !config.origin.startsWith('https://')) {
+      problems.push(
+        `HSTS is compiled in but NEXT_PUBLIC_ORIGIN is ${config.origin}. Browsers will ` +
+          'refuse to reach this site over plain HTTP. Either serve it on HTTPS or ' +
+          'rebuild with ENABLE_HSTS unset.',
+      );
+    }
+    if (!hsts && config.origin.startsWith('https://')) {
+      notes.push(
+        'HSTS is off. That is the right default until the domain is permanently HTTPS, ' +
+          'but a browser will not be told to refuse plaintext. Enable it with ' +
+          'ENABLE_HSTS=1 and rebuild — it is a build-time setting.',
+      );
+    }
   }
 
   for (const note of notes) console.warn(`[config] note: ${note}`);
