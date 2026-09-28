@@ -1,0 +1,139 @@
+'use client';
+
+/**
+ * The palette card — UnNGL's version of NGL's "reveal" card.
+ *
+ * The old design printed six torn scraps with ink outlines and hard shadows.
+ * The new one is quieter and closer to the product's actual claim: the colours
+ * are the hint, so they get the whole frame, overlapping as blobs, and
+ * everything else shrinks to a caption. The hex labels survive, because on the
+ * algorithm and claim pages they are the point — they are what a reader
+ * checks their own implementation against.
+ *
+ * The layout is fixed, not random, so the server-rendered markup and the client
+ * hydration match exactly.
+ *
+ * @license AGPL-3.0-or-later
+ */
+
+import { isLight } from '@/lib/palette/client';
+import { paletteHash } from '@/lib/palette/extract';
+import { cn } from '@/lib/cn';
+
+export interface CollapsedPalette {
+  colors: string[];
+  primary?: string;
+  weight?: number;
+}
+
+interface Props {
+  colors: string[];
+  className?: string;
+  /** Shows the hex of each colour. */
+  labels?: boolean;
+  /** Adds the algorithm-version + integrity hash footnote. */
+  footnote?: boolean;
+  algorithm?: string;
+  verified?: boolean;
+  /** Tighter padding for use inside forms. */
+  compact?: boolean;
+}
+
+/**
+ * The same four anchored circles the inbox uses, in the same slots, so a
+ * palette looks like itself on the algorithm page and in the inbox. The
+ * offsets are percentages of the panel's own box here rather than the rem
+ * values `PalettePanel` uses, because this card is narrower and its circles
+ * are smaller.
+ */
+const SLOTS = [
+  { color: 1, left: -18, top: 6, size: 62 },
+  { color: 2, left: 30, top: -34, size: 58 },
+  { color: 3, left: 66, top: -14, size: 60 },
+  { color: 4, left: 44, top: 44, size: 64 },
+] as const;
+
+export function PaletteCollage({
+  colors,
+  className,
+  labels = true,
+  footnote = false,
+  algorithm = '1.0.0',
+  verified,
+  compact = false,
+}: Props) {
+  const six = normalize(colors);
+  const hash = paletteHash({
+    colors: six,
+    primary: six[0]!,
+    weight: 0,
+  });
+
+  return (
+    <figure className={cn(compact ? 'p-2' : 'p-3', className)}>
+      <div
+        className="relative overflow-hidden rounded-2xl"
+        role="img"
+        aria-label={`Palette: ${six.join(' ')}`}
+      >
+        <span className="absolute inset-0 block" style={{ background: six[0] }} />
+        {SLOTS.map((b, i) => (
+          <span
+            key={i}
+            aria-hidden
+            className="absolute block aspect-square rounded-full"
+            style={{
+              left: `${b.left}%`,
+              top: `${b.top}%`,
+              width: `${b.size}%`,
+              background: six[b.color],
+            }}
+          />
+        ))}
+
+        {/* The hexes ride on the bottom edge as small pills, each one picking
+            its own foreground so it stays readable on any of the six. */}
+        {labels && (
+          <div className="absolute inset-x-0 bottom-0 flex flex-wrap gap-1 p-1.5">
+            {six.map((hex, i) => (
+              <span
+                key={`${hex}-${i}`}
+                className="rounded-full px-1.5 py-0.5 font-mono text-[0.62rem] leading-none"
+                style={{
+                  background: isLight(hex) ? 'rgba(255,255,255,0.92)' : 'rgba(27,27,51,0.88)',
+                  color: isLight(hex) ? '#1b1b33' : '#ffffff',
+                }}
+              >
+                {hex}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {footnote && (
+        <figcaption className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[0.68rem] text-ink-soft">
+          <span>UnNGL palette v{algorithm}</span>
+          <span aria-hidden>·</span>
+          <span>6 colours</span>
+          <span aria-hidden>·</span>
+          <span title="Integrity hash of the canonical palette JSON">id {hash}</span>
+          {verified !== undefined && (
+            <>
+              <span aria-hidden>·</span>
+              <span className={verified ? 'text-ink' : 'text-coral'}>
+                {verified ? 'server-verified' : 'unverified'}
+              </span>
+            </>
+          )}
+        </figcaption>
+      )}
+    </figure>
+  );
+}
+
+function normalize(colors: string[]): string[] {
+  const clean = colors.filter((c) => /^#[0-9a-f]{6}$/i.test(c)).slice(0, 6);
+  while (clean.length < 6) clean.push(clean[0] ?? '#000000');
+  return clean;
+}

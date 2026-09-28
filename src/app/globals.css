@@ -1,0 +1,468 @@
+@import 'tailwindcss';
+
+@import '@fontsource-variable/figtree';
+@import '@fontsource/instrument-serif/400.css';
+@import '@fontsource/instrument-serif/400-italic.css';
+
+/* ------------------------------------------------------------------ *
+ * UnNGL design system
+ *
+ * Built from the screen mockups. The rules of the house:
+ *   - the page is a soft lavender field, cards are white and rounded
+ *   - colour arrives as overlapping organic blobs, never as flat bars
+ *   - nothing has an ink outline; surfaces are separated by colour and
+ *     whitespace, not by a border
+ *   - the one hard edge in the app is the shadow under the primary button,
+ *     and it is a colour, not black
+ *   - the serif is used for exactly one thing at a time: a human voice —
+ *     the prompt above the composer, and the message bodies themselves
+ * ------------------------------------------------------------------ */
+
+@theme {
+  /* Surfaces. The field is lavender; cards float on it in pure white. */
+  --color-canvas: #e9e9f2;
+  --color-surface: #ffffff;
+  --color-surface-sunk: #f4f4fa;
+
+  /* Ink is a deep navy, not black. It reads softer on a lavender field. */
+  --color-ink: #1b1b33;
+  --color-ink-soft: #6c6c85;
+  --color-ink-faint: #9a9ab0;
+  --color-line: #dcdce8;
+
+  /*
+   * The six the mockup's collage is made of. They are also the product's
+   * promise made visible: the six colours a sender's photo is reduced to are
+   * shown in this family, and the last three double as the bullet colours on
+   * the privacy screen.
+   */
+  --color-amber: #ffc800;
+  --color-coral: #f2543d;
+  --color-teal: #2ec4a6;
+  --color-indigo: #3d3dc4;
+  --color-pink: #ff8ec4;
+  --color-sky: #5b9df9;
+
+  --font-display: 'Figtree Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Instrument Serif', ui-serif, Georgia, serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+
+  /*
+   * The mockup has no hard shadows. This one is the exception, and it only
+   * ever sits under a primary button — a coral slab peeking out below and to
+   * the right, the way a risograph mis-registers.
+   */
+  --shadow-press: 0 4px 0 var(--color-coral);
+  --shadow-lift: 0 18px 40px -24px rgb(27 27 51 / 0.45);
+
+  --radius-card: 24px;
+  --radius-chip: 999px;
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-display);
+    font-weight: 450;
+    min-height: 100dvh;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  ::selection {
+    background: var(--color-amber);
+    color: var(--color-ink);
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-indigo);
+    outline-offset: 3px;
+  }
+
+  /*
+   * Keyboard skip link. Parked off-screen and revealed on focus, so it costs
+   * nothing visually but gives anyone tabbing through the nav a way past it.
+   * `left: -9999px` rather than `clip` so it genuinely leaves the viewport and
+   * cannot be reached by a pointer that happens to sweep the top-left corner.
+   */
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 100;
+    padding: 0.75rem 1.25rem;
+    background: var(--color-ink);
+    color: #fff;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .skip-link:focus {
+    left: 0;
+  }
+
+  /* The skip target should not draw a ring around the whole page. */
+  #main:focus {
+    outline: none;
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+  }
+}
+
+@layer components {
+  /* ---------- surfaces ---------- */
+
+  /*
+   * A card is white, generously rounded, and carries no border. On a lavender
+   * field the colour difference is already the separation; a border on top of
+   * that is just a line through the design.
+   */
+  .card {
+    background: var(--color-surface);
+    border-radius: var(--radius-card);
+  }
+
+  .card-sunk {
+    background: var(--color-surface-sunk);
+    border-radius: var(--radius-card);
+  }
+
+  /*
+   * The "no palette" state in the inbox. Dashed, and transparent rather than
+   * white, so it reads as the absence of a hint rather than a card without one.
+   */
+  .card-dashed {
+    background: transparent;
+    border: 2px dashed var(--color-line);
+    border-radius: var(--radius-card);
+  }
+
+  /* ---------- buttons ---------- */
+
+  /*
+   * Everything is a pill. The primary is the one element in the app with a
+   * hard edge: a coral slab under it that compresses to nothing on press.
+   */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.85rem 1.6rem;
+    border-radius: var(--radius-chip);
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font-weight: 600;
+    font-size: 0.98rem;
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+      transform 120ms ease,
+      box-shadow 120ms ease,
+      background-color 120ms ease,
+      opacity 120ms ease;
+  }
+
+  .btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+
+  .btn:active:not(:disabled) {
+    transform: translateY(2px);
+  }
+
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background: var(--color-ink);
+    color: #fff;
+    box-shadow: var(--shadow-press);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 0 var(--color-coral);
+  }
+
+  .btn-primary:active:not(:disabled) {
+    transform: translateY(4px);
+    box-shadow: 0 0 0 var(--color-coral);
+  }
+
+  /* The outlined pill: a quiet action next to a loud one. */
+  .btn-outline {
+    background: var(--color-surface);
+    border: 2px solid var(--color-ink);
+    color: var(--color-ink);
+  }
+
+  .btn-danger {
+    background: var(--color-coral);
+    color: #fff;
+  }
+
+  .btn-quiet {
+    background: transparent;
+    color: var(--color-ink-soft);
+    padding-inline: 0.75rem;
+  }
+
+  .btn-sm {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+  }
+
+  /* ---------- type ---------- */
+
+  /*
+   * The serif, and only the serif. Instrument Serif italic sits above the
+   * composer; its roman is what message bodies are set in. Both are a person
+   * speaking. Interface labels never use it.
+   */
+  .serif-accent {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 400;
+  }
+
+  .serif-body {
+    font-family: var(--font-serif);
+    font-style: normal;
+    font-weight: 400;
+  }
+
+  .display-xl {
+    font-size: clamp(2.1rem, 8vw, 3.6rem);
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    line-height: 1.02;
+  }
+
+  .display-lg {
+    font-size: clamp(1.6rem, 5vw, 2.3rem);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+  }
+
+  .display-md {
+    font-size: clamp(1.25rem, 3.4vw, 1.6rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+
+  .label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+  }
+
+  .mono-chip {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.03em;
+  }
+
+  /*
+   * The small pill the mockup puts next to the wordmark: a white lozenge with
+   * a hairline edge, holding four colour dots. It is the brand mark, and it
+   * appears on every collage header.
+   */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.95rem;
+    border-radius: var(--radius-chip);
+    background: var(--color-surface);
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .pill-outline {
+    background: var(--color-surface);
+    border: 1.5px solid var(--color-line);
+    color: var(--color-ink);
+  }
+
+  .dot-row {
+    display: inline-flex;
+    gap: 3px;
+  }
+
+  .dot-row > i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: block;
+  }
+
+  /* ---------- inputs ---------- */
+
+  /*
+   * A sunk white field with no border. On the send card the surface is white,
+   * so the field is a very slightly greyer dip rather than a hole cut in it.
+   */
+  .field {
+    display: block;
+    width: 100%;
+    background: var(--color-surface-sunk);
+    color: var(--color-ink);
+    border: 2px solid transparent;
+    border-radius: var(--radius-card);
+    padding: 0.9rem 1.1rem;
+    font-size: 1rem;
+    line-height: 1.55;
+    transition: border-color 120ms ease, background-color 120ms ease;
+  }
+
+  .field::placeholder {
+    color: var(--color-ink-faint);
+  }
+
+  .field:hover {
+    border-color: var(--color-line);
+  }
+
+  .field:focus {
+    outline: none;
+    background: var(--color-surface);
+    border-color: var(--color-indigo);
+  }
+
+  .field:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  /*
+   * The message box. The serif placeholder is not decoration: the prompt is
+   * the first thing a sender reads, and the mockup sets it as speech.
+   */
+  .field-serif {
+    font-family: var(--font-serif);
+    font-size: 1.3rem;
+    line-height: 1.45;
+  }
+
+  .field-serif::placeholder {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 1.4rem;
+  }
+
+  .field-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--color-ink-soft);
+  }
+
+  /* An error sits in a coral strip, not a red box. */
+  .alert-error {
+    background: color-mix(in oklab, var(--color-coral) 14%, var(--color-surface));
+    color: var(--color-ink);
+    border-radius: var(--radius-chip);
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  /* ---------- prose ---------- */
+
+  .prose-unngl p {
+    margin-bottom: 1rem;
+    line-height: 1.7;
+  }
+
+  .prose-unngl h2 {
+    font-size: 1.5rem;
+    margin: 2.2rem 0 0.9rem;
+  }
+
+  .prose-unngl h3 {
+    font-size: 1.1rem;
+    margin: 1.6rem 0 0.6rem;
+  }
+
+  .prose-unngl ul,
+  .prose-unngl ol {
+    margin: 0 0 1rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .prose-unngl ul {
+    list-style: disc;
+  }
+
+  .prose-unngl ol {
+    list-style: decimal;
+  }
+
+  .prose-unngl code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    background: var(--color-surface-sunk);
+    border-radius: 6px;
+    padding: 0.05em 0.35em;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

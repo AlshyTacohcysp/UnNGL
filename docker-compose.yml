@@ -1,0 +1,63 @@
+# UnNGL in one command.
+#
+#   cp .env.example .env      # then set SESSION_SECRET
+#   docker compose up -d
+#
+# The database is a real Postgres in the `db` service. It is the same engine
+# Supabase runs, so a compose deployment and a Vercel one behave identically —
+# `docker compose down` is the only thing that discards the data, and
+# `docker compose down -v` is the command that actually removes it.
+
+services:
+  unngl:
+    build: .
+    image: unngl:latest
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 10s
+    ports:
+      - '3000:3000'
+    # One source of truth for configuration. Every variable, including
+    # NEXT_PUBLIC_ORIGIN, comes from .env via env_file — do not restate them
+    # under `environment`, where a stray shell export would silently win.
+    env_file:
+      - .env
+    environment:
+      # Container-specific wiring, not a setting anyone should tune.
+      DATABASE_URL: postgres://postgres:postgres@db:5432/unngl
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: unngl
+    volumes:
+      - unngl_db:/var/lib/postgresql/data
+    healthcheck:
+      # The app applies its own migrations at boot, so it must not start until
+      # Postgres is genuinely accepting connections, not merely running.
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d unngl']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    # Not published to the host. Reach it through the app, or with
+    # `docker compose exec db psql -U postgres -d unngl`.
+
+volumes:
+  unngl_db:

@@ -1,0 +1,116 @@
+# Keep the properties this project claims actually true.
+#
+# The README says 0 vulnerabilities, 74 tests, a clean strict typecheck, a
+# working production build, and a data layer that works against a real
+# PostgreSQL. None of those are true forever without something checking, so
+# this checks all of them on every push and pull request.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Don't burn minutes re-running a push that the PR already covered.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: typecheck, test, postgres, build, audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: The data layer against a real PostgreSQL
+        # PGlite is PostgreSQL compiled to WebAssembly and pglite-socket serves
+        # it over the wire protocol, so this runs the actual driver, the actual
+        # placeholder rewriting and the actual DDL. A query that type-checks and
+        # is not valid Postgres fails here and nowhere else.
+        run: npm run test:pg
+
+      - name: Audit (production dependencies)
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Audit (full tree, including dev)
+        # This has been 0 all along, so keep it that way. PostCSS and Vitest
+        # both needed overrides/pins to get here; a routine bump can undo that.
+        run: npm audit --audit-level=moderate
+
+      - name: Build
+        run: npm run build
+
+      - name: The production server actually starts, and the product works
+        # A build that compiles but produces a server that cannot boot is the
+        # failure mode that matters, and it is not caught by the build itself.
+        # Run it the way an operator would, with a real secret and real HTTPS
+        # origin so the boot audit is exercised rather than skipped, against a
+        # real database.
+        # The origin is the address the test actually reaches, because the
+        # same-origin check compares the Origin header against the real Host
+        # header and a test cannot forge Host. The https configuration path is
+        # covered by `npm test`, which asserts that an http Origin is refused
+        # against an https-configured instance, and by the boot audit below.
+        env:
+          SESSION_SECRET: ci-run-only-not-a-real-secret-but-long-enough
+          NEXT_PUBLIC_ORIGIN: http://127.0.0.1:3000
+          MAIL_TRANSPORT: console
+          # The port has to match the one `db:serve` above actually binds.
+          # Left unset, config falls back to localhost:5432 while PGlite
+          # listens on 55432, the server answers 500 to every request, and
+          # the step fails as "server did not become healthy" — which says
+          # nothing at all about what was wrong.
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:55432/postgres
+          DB_POOL_MAX: '1'
+        run: |
+          npm run db:serve > /tmp/pg.log 2>&1 &
+          for i in $(seq 1 30); do
+            grep -q 'Postgres listening' /tmp/pg.log && break
+            sleep 1
+          done
+          cat /tmp/pg.log
+
+          npm start > /tmp/app.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl -sf http://127.0.0.1:3000/api/health > /dev/null; then
+              echo "server is up"
+              curl -s http://127.0.0.1:3000/api/health
+              echo
+              break
+            fi
+            sleep 1
+          done
+
+          if ! curl -sf http://127.0.0.1:3000/api/health > /dev/null; then
+            echo "server did not become healthy" >&2
+            cat /tmp/app.log >&2
+            exit 1
+          fi
+
+          # The whole product, over HTTP. Anything the data layer got wrong on
+          # the way from synchronous to asynchronous shows up here.
+          E2E_BASE=http://127.0.0.1:3000 \
+          E2E_ORIGIN=http://127.0.0.1:3000 \
+          npm run test:e2e
