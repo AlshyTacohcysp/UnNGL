@@ -114,7 +114,7 @@ export function HintPicker({
               choose a file
             </button>
           </p>
-          <p className="serif-accent text-lg">your colours, not your face</p>
+          <p className="label mt-3">your colours, not your face</p>
         </div>
       )}
 

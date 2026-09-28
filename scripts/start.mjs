@@ -8,7 +8,7 @@
  * One subtlety that bit us: the standalone server has to run with its own
  * directory as cwd (that is where Next copies `public/` and `.next/static`),
  * so any *relative* path in the environment would silently resolve against
- * .next/standalone instead of the checkout. DATABASE_PATH is absolutised
+ * .next/standalone instead of the checkout.
  * against the project root before the process starts.
  *
  * @license AGPL-3.0-or-later
@@ -31,26 +31,10 @@ const entry = path.join(standaloneDir, 'server.js');
 const port = process.env.PORT ?? '3000';
 const host = process.env.HOST ?? '0.0.0.0';
 
-/** Resolve a possibly-relative path against the project root. */
-function absolutise(name) {
-  const value = process.env[name];
-  if (!value || path.isAbsolute(value) || value === ':memory:') return;
-  process.env[name] = path.resolve(root, value);
-}
-
 if (existsSync(entry)) {
-  // Pin the database to the project root unless the operator chose a path.
-  //
-  // This must not be left to the app's own default, which is
-  // path.join(process.cwd(), 'data', ...) — and the standalone server runs with
-  // .next/standalone as its cwd. Left alone, a deployment with no DATABASE_PATH
-  // set creates its database at .next/standalone/data/unngl.sqlite, and every
-  // `npm run build` deletes .next. The instance then comes back up perfectly
-  // healthy, empty, with every message gone and no error anywhere.
-  if (!process.env.DATABASE_PATH) {
-    process.env.DATABASE_PATH = path.join(root, 'data', 'unngl.sqlite');
-  }
-  absolutise('DATABASE_PATH');
+  // The database is a remote Postgres, so there is nothing to pin or create
+  // here any more — the old code existed to keep a SQLite file from being
+  // created inside .next/standalone, where every build would delete it.
 
   // Next does not copy these into the standalone output; the Dockerfile does it
   // explicitly, but a plain `next build` here needs the same two lines.
@@ -64,10 +48,6 @@ if (existsSync(entry)) {
   if (existsSync(publicSrc) && !existsSync(path.join(standaloneDir, 'public'))) {
     cpSync(publicSrc, path.join(standaloneDir, 'public'), { recursive: true });
   }
-  if (process.env.DATABASE_PATH && process.env.DATABASE_PATH !== ':memory:') {
-    mkdirSync(path.dirname(process.env.DATABASE_PATH), { recursive: true });
-  }
-
   const child = spawn(process.execPath, [entry], {
     stdio: 'inherit',
     cwd: standaloneDir,

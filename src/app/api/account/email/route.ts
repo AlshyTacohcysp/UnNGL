@@ -34,12 +34,12 @@ export const POST = route('account.email.add', async (req: Request) => {
   const parsed = emailSchema.safeParse((body as { email?: string } | null)?.email);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Invalid email');
 
-  const clash = findUserByEmail(parsed.data);
+  const clash = await findUserByEmail(parsed.data);
   if (clash && clash.id !== userId) {
     return fail('That email is already used by another account.');
   }
 
-  const { code } = issueLoginCode(parsed.data, 'add_email');
+  const { code } = await issueLoginCode(parsed.data, 'add_email');
   const mail = buildLoginMail(parsed.data, code);
   await sendLoginCode(parsed.data, code, mail.url);
   // See config.exposeDevCodes: never leak a working code back to the caller in
@@ -55,11 +55,11 @@ export const PUT = route('account.email.verify', async (req: Request) => {
   const parsed = codeSchema.safeParse(body);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Invalid request');
 
-  const result = consumeLoginCode(parsed.data.email, parsed.data.code, 'add_email');
+  const result = await consumeLoginCode(parsed.data.email, parsed.data.code, 'add_email');
   if (result.status !== 'ok') return fail('That code is not right, or it has expired.');
 
   try {
-    addEmailToUser(userId, parsed.data.email);
+    await addEmailToUser(userId, parsed.data.email);
   } catch (err) {
     return fail(err instanceof Error ? err.message : 'Could not add that email');
   }

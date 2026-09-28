@@ -91,7 +91,7 @@ export function MessagesPanel({
 
       {messages.length === 0 ? (
         <div className="card p-10 text-center">
-          <p className="serif-accent text-3xl">nothing here yet.</p>
+          <p className="display-md">Nothing here yet.</p>
           <p className="mt-2 text-ink-soft">Share your link and see what turns up.</p>
         </div>
       ) : (

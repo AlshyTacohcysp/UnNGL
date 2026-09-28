@@ -26,7 +26,7 @@ UnNGL inverts it:
 | Can you check it? | no | yes — recompute it yourself, we publish the spec |
 | What happens to photos | stored and resold | deleted 7 days after the palette is derived |
 | IP addresses | stored | never stored raw, only a truncated HMAC per message |
-| Source | closed | AGPL, self-hostable, one SQLite file |
+| Source | closed | AGPL, self-hostable, one Postgres database |
 
 A palette is a genuinely good hint: to someone who *knows* you it is an unmistakable
 fingerprint, and to someone who doesn't it is useless. That is exactly the right shape
@@ -36,12 +36,13 @@ for privacy — it reveals to the people who already know you, and nothing to an
 
 ## Run it
 
-Requires **Node 22.5 or newer** (the database uses Node's built-in `node:sqlite` — no
-native module to compile, no database server to run).
+Requires **Node 22 or newer**. The database is PostgreSQL, over the network, through
+the `postgres` driver — no native module to compile.
 
 ```bash
 npm install
 cp .env.example .env.local
+npm run db:serve &   # a real Postgres, in process, for development
 npm run build
 npm start          # http://localhost:3000
 ```
@@ -77,15 +78,27 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
 docker compose up -d
 ```
 
-The database lives in a Docker **named volume**, so `docker compose down` never
-touches it and it is not readable from the rest of the host. `docker-compose.yml`
-comments show how to switch to a bind mount, and the one `chown` that requires.
+`docker compose` also starts a PostgreSQL container and keeps its data in a named
+volume, so `docker compose down` never touches it and `docker compose down -v` is
+the only command that does.
+
+### Deploying to Vercel + Supabase
+
+Both free tiers, no card. Full walkthrough in
+[`docs/en/deployment.md`](docs/en/deployment.md); the short version:
+
+1. Create a Supabase project, wait for it to build.
+2. Paste its **transaction pooler** connection string into `DATABASE_URL` on Vercel.
+   Not the direct one — a serverless function opens a connection per request.
+3. Generate a `SESSION_SECRET`, set it, and set `NEXT_PUBLIC_ORIGIN` to your domain.
+4. Deploy. The schema is applied automatically on the first request.
 
 ### Deploying anywhere else
 
-- **Vercel / any Node host:** works, but set `DATABASE_PATH` to a persistent disk —
-  serverless filesystems are ephemeral, and this app is stateful by nature.
-- **Fly.io / Railway / a VPS:** the Docker image is the whole story.
+- **Fly.io / Railway / a VPS:** the Docker image is the whole story; point
+  `DATABASE_URL` at any PostgreSQL 14 or newer.
+- **Your own Postgres:** the app is stateless apart from that database, so any
+  host that can run the container can run UnNGL.
 
 ---
 
@@ -161,7 +174,7 @@ stored as unverified and the reader is shown that. There is no image library in 
 stack at all, which is the only reason this is possible without a native dependency.
 
 ```bash
-npm test      # 64 tests, including a golden hash that fails if the algorithm drifts
+npm test      # 74 tests, including a golden hash that fails if the algorithm drifts
 ```
 
 ---
@@ -173,14 +186,14 @@ npm test      # 64 tests, including a golden hash that fails if the algorithm dr
 | **Next.js 15 + React 19** | server and client in one codebase, one deployable, no separate API |
 | **TypeScript, strict** | `noUncheckedIndexedAccess` on; it found real bugs during the build |
 | **Tailwind v4** | tokens live in `globals.css` as CSS variables, so the design is inspectable |
-| **SQLite via `node:sqlite`** | zero native modules, zero services. The entire state of the app is one file you can copy |
+| **PostgreSQL via `postgres`** | the same free database Supabase gives you, so the app is stateless and deploys to a serverless runtime. No ORM, no migration framework |
 | **No ORM** | ~200 lines of typed queries is less code than the ORM's config, and the SQL is readable |
 | **No image library** | a PNG decoder is 200 lines; a native dep would break `npm install` on half of all platforms |
 | **Auth written here** | email codes + one generic OAuth client instead of a framework that would decide our schema |
 | **Self-hosted fonts** | fontsource packages, not Google — a privacy product must not call Google |
 
-Dependencies, in full: `next`, `react`, `react-dom`, `zod`, `nanoid`, and two Fontsource
-packages. That's it — and the pieces most worth attacking (image decoding, SMTP,
+Dependencies, in full: `next`, `react`, `react-dom`, `zod`, `nanoid`, `postgres`, and two
+Fontsource packages. That's it — and the pieces most worth attacking (image decoding, SMTP,
 hashing, HTTP fetching) are written in-repo so the tree's attack surface stays small
 enough to audit by reading. See [`docs/en/security.md`](docs/en/security.md#supply-chain).
 
@@ -238,7 +251,7 @@ src/
       extract.ts     THE ALGORITHM — browser + server, no dependencies
       png.ts         dependency-free PNG decoder (the verification path)
       client.ts      browser upload pipeline
-    db.ts            node:sqlite, migrations, no ORM
+    db.ts            postgres, migrations, no ORM
     auth.ts          users, sessions, email codes
     hints.ts         create + verify a hint
     inbox.ts         inboxes, messages, claim tokens
@@ -269,7 +282,7 @@ scripts/             samples, assets, seed, start
 - **The image decoder** has hard bounds on edge, pixel count and inflate size,
   all checked before allocation. Dimension bombs and zip bombs are refused in
   about a millisecond.
-- **`npm audit`: 0 vulnerabilities.** 46 security regression tests.
+- **`npm audit`: 0 vulnerabilities.** 56 security regression tests.
 
 Full write-up, threat model and honest limitations:
 [`docs/en/security.md`](docs/en/security.md) ·

@@ -29,13 +29,13 @@ export const GET = route('health', async (req: Request) => {
     return ok({ status: 'ok', time: new Date().toISOString() });
   }
 
-  const counts = get<{ n: number }>('SELECT COUNT(*) AS n FROM users');
+  const counts = await get<{ n: number }>('SELECT COUNT(*) AS n FROM users');
   return ok({
     status: 'ok',
     version: process.env.npm_package_version ?? '0.1.0',
     node: process.version,
-    storage: 'node:sqlite',
-    schema: schemaVersion(),
+    storage: 'postgres',
+    schema: await schemaVersion(),
     users: Number(counts?.n ?? 0),
     algorithm: ALGORITHM_VERSION,
     time: new Date().toISOString(),

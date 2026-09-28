@@ -11,7 +11,7 @@
  */
 
 import { nanoid } from 'nanoid';
-import { get, run } from './db';
+import { db, type Executor, get, run } from './db';
 import { config } from './config';
 import { analyzePng, storeImage } from './images';
 import { ALGORITHM_VERSION, paletteHash, PALETTE_SIZE, type Palette } from './palette/extract';
@@ -80,12 +80,13 @@ export interface CreateHintResult {
  *                     to mark the hint verified or not)
  * @param source       'upload' | 'instagram' | 'avatar'
  */
-export function createHintFromImage(
+export async function createHintFromImage(
   messageId: string,
   pngBytes: Uint8Array,
   claimed: unknown,
   source: string,
-): CreateHintResult {
+  t?: Executor,
+): Promise<CreateHintResult> {
   // The server never trusts the client's pixels or colours: it decodes and
   // recomputes everything itself, using the same reference implementation.
   const analysis = analyzePng(pngBytes);
@@ -96,10 +97,10 @@ export function createHintFromImage(
   };
   const verified = isPaletteShape(claimed) && paletteHash(claimed) === paletteHash(serverPalette);
 
-  const stored = storeImage(pngBytes, { retainDays: config.retentionDays });
+  const stored = await storeImage(pngBytes, { retainDays: config.retentionDays }, t);
   const now = Date.now();
   const id = nanoid(16);
-  run(
+  await (t ?? db()).run(
     `INSERT INTO hints (id, message_id, palette, primary_hex, weight, hash, algorithm, verified, image_id, source, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
@@ -114,10 +115,10 @@ export function createHintFromImage(
     source,
     now,
   );
-  return { hint: getHintForMessage(messageId)!, serverPalette };
+  return { hint: (await getHintForMessage(messageId, t))!, serverPalette };
 }
 
-export function getHintForMessage(messageId: string): Hint | undefined {
-  return get<Hint>('SELECT * FROM hints WHERE message_id = ?', messageId);
+export async function getHintForMessage(messageId: string, t?: Executor): Promise<Hint | undefined> {
+  return (t ?? db()).get<Hint>('SELECT * FROM hints WHERE message_id = ?', messageId);
 }
 

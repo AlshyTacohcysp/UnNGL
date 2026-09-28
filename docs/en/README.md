@@ -25,7 +25,7 @@ UnNGL inverts it on every axis:
 | Can you verify it? | no | yes — recompute it yourself; the spec is public |
 | What happens to photos | stored, and sold | deleted 7 days after the palette is derived |
 | IP addresses | stored | never stored raw; a truncated HMAC per message |
-| Source | closed | AGPL-3.0, self-hostable, one SQLite file |
+| Source | closed | AGPL-3.0, self-hostable, one PostgreSQL database |
 
 **Why a palette is a good hint.** To someone who *knows* you, six colours pulled
 from your profile photo is an unmistakable fingerprint. To someone who doesn't,

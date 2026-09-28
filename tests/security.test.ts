@@ -384,20 +384,20 @@ describe('image rejection typing', () => {
  * ------------------------------------------------------------------ */
 
 describe('deployment invariants', () => {
-  it('pins DATABASE_PATH to the project root, not the standalone cwd', async () => {
-    // Regression, and the worst bug in this file's history. The app defaulted
-    // DATABASE_PATH to path.join(process.cwd(), 'data', ...), but the standalone
-    // server runs with .next/standalone as its cwd — so a deployment that set no
-    // DATABASE_PATH created .next/standalone/data/unngl.sqlite, and every
-    // `npm run build` deleted .next. The instance came back healthy and empty,
-    // with every message gone and nothing in the logs.
+  it('creates no database file of its own', () => {
+    // The worst bug in this file's history. The app defaulted DATABASE_PATH to
+    // path.join(process.cwd(), 'data', ...), but the standalone server runs with
+    // .next/standalone as its cwd — so a deployment that set no DATABASE_PATH
+    // created .next/standalone/data/unngl.sqlite, and every `npm run build`
+    // deleted .next. The instance came back healthy and empty, with every
+    // message gone and nothing in the logs.
+    //
+    // The database is a remote Postgres now, so the whole class of bug is gone
+    // rather than fixed: there is no local file for a build to delete.
     const start = readCode('../scripts/start.mjs');
-    expect(start).toMatch(/process\.env\.DATABASE_PATH\s*=\s*path\.join\(root,/);
-    // ...and it must happen before the value is resolved against the root, or
-    // the relative-path handling below never sees it.
-    expect(start.indexOf('path.join(root,')).toBeLessThan(
-      start.indexOf("absolutise('DATABASE_PATH')"),
-    );
+    expect(start).not.toMatch(/DATABASE_PATH/);
+    expect(start).not.toMatch(/data\/unngl|\.sqlite/);
+    expect(readCode('../src/lib/config.ts')).not.toMatch(/sqlite/i);
   });
 
   it('never falls back to a bare npx next, which would fetch another major', async () => {
@@ -507,5 +507,129 @@ describe('same-origin refuses a scheme downgrade', () => {
     // not perform, which is its own problem.
     expect(http).toMatch(/config\.origin\.startsWith\('https:\/\/'\)/);
     expect(http).toMatch(/o\.protocol !== 'https:'/);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Postgres placeholder rewriting
+ * ------------------------------------------------------------------ */
+
+describe('toPositional', () => {
+  it('numbers ? placeholders in order', async () => {
+    const { toPositional } = await import('../src/lib/db');
+    expect(toPositional('SELECT * FROM users WHERE id = ? AND email = ?')).toBe(
+      'SELECT * FROM users WHERE id = $1 AND email = $2',
+    );
+    expect(toPositional('UPDATE x SET a = ?, b = ? WHERE c = ?')).toBe(
+      'UPDATE x SET a = $1, b = $2 WHERE c = $3',
+    );
+  });
+
+  it('leaves a ? inside a string literal alone', async () => {
+    // The whole SQL layer is written with `?` because node:sqlite took `?`. A
+    // naive string replace would turn a literal question mark into a
+    // placeholder and shift every parameter after it.
+    const { toPositional } = await import('../src/lib/db');
+    expect(toPositional("SELECT 'why?' AS q, ? AS id")).toBe(
+      "SELECT 'why?' AS q, $1 AS id",
+    );
+    // '' is an escaped quote, not the end of the literal.
+    expect(toPositional("SELECT 'it''s ? here', ?")).toBe("SELECT 'it''s ? here', $1");
+    expect(toPositional('SELECT "col?name" FROM t WHERE id = ?')).toBe(
+      'SELECT "col?name" FROM t WHERE id = $1',
+    );
+  });
+
+  it('is a no-op on a query with no placeholders', async () => {
+    const { toPositional } = await import('../src/lib/db');
+    expect(toPositional('SELECT 1')).toBe('SELECT 1');
+    expect(toPositional('')).toBe('');
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Postgres
+ * ------------------------------------------------------------------ */
+
+describe('the data layer', () => {
+  it('is Postgres, with no SQLite left in it', () => {
+    const src = readCode('../src/lib/db.ts');
+    expect(src).not.toMatch(/PRAGMA/);
+    expect(src).not.toMatch(/DatabaseSync/);
+    expect(src).not.toMatch(/node:sqlite/);
+    // `?` is the placeholder style the whole codebase is written in.
+    expect(src).toContain('toPositional');
+  });
+
+  it('never sends server-side prepared statements', () => {
+    // Supabase's transaction pooler has no session to hang a prepared
+    // statement on, so a connection that has seen one query fails the next.
+    expect(readCode('../src/lib/db.ts')).toMatch(/prepare:\s*false/);
+  });
+
+  it('stores timestamps so they come back as numbers', () => {
+    const src = readCode('../src/lib/db.ts');
+    // BIGINT comes back from the driver as a string, which would quietly turn
+    // every date comparison in the app into string comparison.
+    expect(src).toContain('DOUBLE PRECISION');
+    expect(src).not.toMatch(/TIMESTAMP WITH TIME ZONE|BIGINT/);
+  });
+});
+
+describe('a pool cannot lie about who is calling', () => {
+  it('counts a rate-limited hit in one statement', () => {
+    // Reading the counter and writing it back is a race. SQLite hid it behind
+    // a single connection; a pool does not, and the login bucket is what
+    // stands between an attacker and the email sign-in.
+    const src = readCode('../src/lib/ratelimit.ts');
+    expect(src).toMatch(/ON CONFLICT \(key\) DO UPDATE SET/);
+    expect(src).toMatch(/RETURNING count, window_start/);
+    expect(src).not.toMatch(/SELECT window_start, count FROM rate_limits/);
+  });
+
+  it('claims a login attempt in one statement', () => {
+    const src = readCode('../src/lib/auth.ts');
+    const claim = src.slice(src.indexOf('export async function consumeLoginCode'));
+    expect(claim).toMatch(/UPDATE login_tokens SET attempts = attempts \+ 1/);
+    expect(claim).toMatch(/RETURNING/);
+    expect(claim).not.toMatch(/SELECT id, code_hash, attempts/);
+  });
+});
+
+describe('a transaction stays inside its transaction', () => {
+  const files = ['src/lib/hints.ts', 'src/lib/images.ts', 'src/lib/inbox.ts'];
+
+  it('routes every statement through the handle it was given', () => {
+    for (const file of files.map((f) => `../${f}`)) {
+      const src = readCode(file);
+      for (const m of src.matchAll(
+        /export (?:async )?function (\w+)\(([\s\S]*?)\): Promise<[^]*?>\{/g,
+      )) {
+        const name = m[1]!;
+        const params = m[2] ?? '';
+        if (!/\bt\?:/.test(params)) continue;
+        // Read the function's own body, by brace matching from its `{`.
+        let depth = 0;
+        let i = src.indexOf('{', m.index! + m[0].length - 1);
+        const start = i;
+        for (; i < src.length; i++) {
+          if (src[i] === '{') depth++;
+          else if (src[i] === '}' && --depth === 0) break;
+        }
+        const body = src.slice(start, i + 1);
+        expect(body, `${file}: ${name} has no body`).toMatch(/[\s\S]/);
+        // A function that accepts a transaction handle must not also reach for
+        // the pool: that borrows a second connection, which deadlocks on a
+        // small pool and writes outside the transaction otherwise.
+        expect(body, `${file}: ${name} takes a transaction handle and calls the pool`)
+          .not.toMatch(/(?<!await )(?<![\w.?!])(all|get|run)\s*(?:<[^()]*?>)?\s*\(/);
+      }
+    }
+  });
+
+  it('threads the handle through the hint path', () => {
+    expect(readCode('../src/lib/hints.ts')).toMatch(/storeImage\(pngBytes,[^)]*,\s*t\)/);
+    expect(readCode('../src/lib/inbox.ts')).toMatch(/createHintFromImage\(msg\.id, imageBytes, claimedPalette, source, t\)/);
+    expect(readCode('../src/lib/inbox.ts')).toMatch(/toView\(\(await getMessage\(msg\.id, t\)\)!, t\)/);
   });
 });

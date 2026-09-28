@@ -1,8 +1,17 @@
 # Deployment
 
-The whole service is one Node process and one SQLite file. There is no database
-server, no cache, no queue, and no object store to provision. If you can run a
-container and copy a file, you can run UnNGL.
+UnNGL is one stateless Node process and one PostgreSQL database. There is no
+cache, no queue, no object store and no file on disk. That is what makes it
+deployable on a free tier: the only thing you have to keep is the database.
+
+Two ways to run it, both free:
+
+| | Cost | Good for |
+|---|---|---|
+| **[Vercel + Supabase](#option-1--vercel--supabase-recommended)** | free | the public instance. No server to maintain. |
+| **[Docker Compose](#option-2--docker-compose)** | free on your own hardware | running it yourself, or a VPS. |
+
+---
 
 ## Before anything: two non-negotiables
 
@@ -12,12 +21,82 @@ container and copy a file, you can run UnNGL.
    ```bash
    openssl rand -base64 48
    ```
-2. **Terminate TLS in front of it.** Session cookies are `Secure` and
-   `__Host-`-prefixed in production, so they are not sent over plain HTTP at all.
-   This is correct behaviour, and it will make local testing look broken until
-   you have a real certificate. Use a real domain, not an IP.
+   Changing it later logs everyone out and invalidates every stored digest. Set
+   it once.
+2. **`NEXT_PUBLIC_ORIGIN` must be your real `https://` domain.** Session cookies
+   are `Secure` and `__Host-`-prefixed in production, so they are not sent over
+   plain HTTP at all, and email links are built from this value.
 
-Optionally, once HTTPS is permanent on the domain:
+---
+
+## Option 1 — Vercel + Supabase (recommended)
+
+Both free tiers. No card, no server, no `docker`.
+
+### 1. The database
+
+1. Create a project at [supabase.com](https://supabase.com) and wait for it to
+   finish building.
+2. Open **Project Settings → Database**. Copy the connection string that looks
+   like this:
+
+   ```
+   postgresql://postgres.[project-ref]:[password]@aws-0-eu-central-1.pooler.supabase.com:6543/postgres
+   ```
+
+> **Use the pooler on port `6543`, not the direct connection on `5432`.**
+> A serverless function opens a fresh database connection per invocation and
+> closes it afterwards. The direct connection is a dedicated session, so a burst
+> of requests exhausts the tier's connection limit and the site falls over. The
+> transaction pooler is built for exactly this. The app connects with
+> `prepare: false` for the same reason — the pooler has no session to hang a
+> prepared statement on.
+
+Set **Transaction pooler** as the pool mode if Supabase asks, and turn **SSL**
+on if it offers the choice. The app does not require the `pgbouncer=true` query
+parameter that the Prisma-style URLs carry; it is harmless if you leave it.
+
+3. Optional, but recommended: open **SQL Editor → New query** and paste
+   [`supabase/schema.sql`](../../supabase/schema.sql), then run it. The app
+   applies the same schema by itself at boot, so this is not required — it just
+   means the tables exist before the first visitor does, and that you have read
+   the schema before it touches your project.
+
+> **The free tier pauses after 7 days of inactivity.** When it wakes, the first
+> request can take up to half a minute while the database restarts. This is the
+> single sharpest edge of running UnNGL for free; everything else about the
+> deployment is uneventful. If that trade is wrong for you, [Option 2](#option-2--docker-compose)
+> on hardware you already own removes it.
+
+### 2. The app
+
+1. Push this repository to GitHub, then **Import Project** on
+   [vercel.com](https://vercel.com). Vercel detects Next.js; nothing needs
+   changing.
+2. Add these **environment variables** (Settings → Environment Variables):
+
+   | Variable | Value |
+   |---|---|
+   | `DATABASE_URL` | the `6543` connection string from step 1 |
+   | `SESSION_SECRET` | the 48 random bytes from above |
+   | `NEXT_PUBLIC_ORIGIN` | `https://your-app.vercel.app` — then your real domain |
+   | `MAIL_TRANSPORT` | `smtp` once you have SMTP configured, see [Email](#email) |
+   | `MAIL_FROM` | `UnNGL <no-reply@yourdomain>` |
+   | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | your SMTP provider's |
+   | `ENABLE_HSTS` | `1` — see the note below |
+
+   `TRUSTED_PROXY=1` **only** if a proxy you control is the sole path to the
+   app. Vercel is that proxy, so set it; without it the app cannot see client IP
+   addresses and every visitor shares one rate-limit bucket, which disables
+   rate limiting in practice.
+
+3. **Deploy.** The first request applies the schema. Nothing else to run.
+
+4. Once you have a real domain, set `NEXT_PUBLIC_ORIGIN` to it and redeploy.
+   `NEXT_PUBLIC_ORIGIN` is a runtime setting — changing it and redeploying is
+   enough, no rebuild of the app is required.
+
+### HSTS
 
 ```bash
 ENABLE_HSTS=1 npm run build
@@ -26,123 +105,66 @@ ENABLE_HSTS=1 npm run build
 HSTS tells browsers to refuse plaintext for two years. Do not enable it while
 still setting things up — browsers will not let you back out.
 
+> On Vercel the build command is in the project settings, so set the variable
+> there and redeploy rather than building locally.
+
 > **`ENABLE_HSTS` is a build-time setting, not a runtime one.** `next.config` is
-> not part of the standalone output, so putting it in `.env` and restarting does
-> nothing at all, silently. It has to be set when you build. The server knows
-> what it was compiled with and says so at boot, so you can tell which happened.
-> With Docker:
+> not present in the deployed output, so putting it in `.env` and restarting does
+> nothing at all, silently. It has to be set when the app is built. The server
+> knows what it was compiled with and says so at boot, so you can tell which
+> happened. With Docker:
 > ```bash
 > docker build --build-arg ENABLE_HSTS=1 -t unngl:latest .
 > ```
 
 ---
 
-## Option 1 — Docker Compose (recommended)
+## Option 2 — Docker Compose
+
+Runs the app and a real PostgreSQL together. Nothing is published to the host
+except the app's own port.
 
 ```bash
 git clone https://github.com/AlshyTacohcysp/UnNGL
 cd UnNGL
 cp .env.example .env
+# set SESSION_SECRET, NEXT_PUBLIC_ORIGIN
+docker compose up -d
 ```
 
-Edit `.env` and set at minimum:
+The database lives in a Docker **named volume**, so `docker compose down` never
+touches it, and `docker compose down -v` is the one command that discards it.
+`docker-compose.yml` waits for the database to actually accept connections
+before starting the app, because the app applies its migrations on boot.
 
-```bash
-NEXT_PUBLIC_ORIGIN=https://unngl.example.com
-SESSION_SECRET=<paste the openssl output>
-```
+To use a PostgreSQL you already have instead of the bundled one, set
+`DATABASE_URL` in `.env` and delete the `DATABASE_URL` line from the
+`environment:` block in `docker-compose.yml`.
 
-Then:
+### Plain Node on a VPS
 
-```bash
-docker compose up -d --build
-docker compose logs -f
-```
-
-The SQLite file lives in a Docker **named volume**, so `docker compose down`
-never touches your messages, and the database is not readable from anywhere else
-on the host. The image runs as a non-root user on port 3000, has a healthcheck,
-and ships Next.js *standalone* output, so the final image carries no build
-tooling and no `node_modules` you did not ask for.
-
-> **Want to see your data?** Switch to a bind mount — but run
-> `mkdir -p data && sudo chown 1001:1001 data` first. The image runs as uid 1001
-> and a directory Docker creates for a bind mount belongs to root, so SQLite
-> cannot create its `-wal`/`-shm` files and the container exits on first start.
-> It is the single most common first-run failure. The exact lines to change are
-> commented at the bottom of `docker-compose.yml`.
-
-Put a reverse proxy in front (Caddy, nginx, Traefik) for TLS. A minimal Caddyfile:
-
-```
-unngl.example.com {
-    reverse_proxy 127.0.0.1:3000
-}
-```
-
-Caddy gets the certificate on its own.
-
-## Option 2 — plain Node on a VPS
+The Docker image is the whole story, and it also runs without Docker:
 
 ```bash
 git clone https://github.com/AlshyTacohcysp/UnNGL
 cd UnNGL
 npm ci
-npm run build
+ENABLE_HSTS=1 npm run build
+DATABASE_URL='postgresql://…' SESSION_SECRET="$(openssl rand -base64 48)" \
+  NEXT_PUBLIC_ORIGIN='https://unngl.example.com' \
+  node scripts/start.mjs
 ```
 
-Run it under a supervisor with a systemd unit:
-
-```ini
-[Unit]
-Description=UnNGL
-After=network.target
-
-[Service]
-Type=simple
-User=unngl
-WorkingDirectory=/srv/unngl
-Environment=NODE_ENV=production
-EnvironmentFile=/srv/unngl/.env
-ExecStart=/usr/bin/node scripts/start.mjs
-Restart=always
-RestartSec=5
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ReadWritePaths=/srv/unngl/data
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-sudo systemctl enable --now unngl
-```
-
-## Option 3 — PaaS (Fly, Railway, Render, Koyeb)
-
-Works as-is, with one requirement: **the filesystem must be persistent**, because
-the database is a file. Mount a volume and point `DATABASE_PATH` at it.
-
-- **Fly.io**: `fly volumes create unngl_data`, set `mounts: ["/srv/data"]`,
-  `DATABASE_PATH=/srv/data/unngl.sqlite`.
-- **Railway / Render**: attach a disk, set the same variable.
-- **Serverless platforms (Vercel, Lambda) will not work**, because their
-  filesystems are ephemeral. Running more than one instance will also not work,
-  for the same reason: SQLite means exactly one writer.
-
-If you need horizontal scale, that is a fork with a different database, not a
-configuration change. Be honest about it in your README if you do it.
+Put it behind a reverse proxy that terminates TLS. The app is stateless, so you
+can run as many as you like against one database.
 
 ---
 
 ## Email
 
 Without configuration, login codes go to the server log and nothing is sent.
-That is fine for a private instance and unusable for a public one.
-
-Set:
+That is fine for a private instance and unusable for a public one — email is the
+primary way to sign in, so a public instance without SMTP cannot be used at all.
 
 ```bash
 MAIL_TRANSPORT=smtp
@@ -161,6 +183,9 @@ dependency. It speaks ESMTP with `STARTTLS`, `PLAIN` and `LOGIN` auth.
 If you stay on `console` in production, the server prints a warning at boot
 saying so. Codes are still never returned in an API response.
 
+Most people reach for Resend, Mailgun, Brevo or Postmark's free tier here; all
+four work, and all four have a free tier that covers a small instance.
+
 ## OAuth (optional)
 
 Set the client id and secret for any provider; each one switches itself on.
@@ -178,40 +203,42 @@ With `NEXT_PUBLIC_ORIGIN=https://unngl.example.com`, Google is
 
 ## Backups
 
-Everything that matters is one file.
+A Postgres database is backed up with `pg_dump`, not `cp`. A plain copy of a
+live database can capture a torn state.
 
 ```bash
-sqlite3 /srv/unngl/data/unngl.sqlite ".backup '/backups/unngl-$(date +%F).sqlite'"
+pg_dump "$DATABASE_URL" -Fc -f "/backups/unngl-$(date +%F).dump"
 ```
 
 With the Docker named volume:
 
 ```bash
-docker run --rm -v unngl_data:/data -v "$PWD":/backup alpine \
-  sh -c 'cd /data && sqlite3 unngl.sqlite ".backup /backup/unngl-$(date +%F).sqlite"'
+docker compose exec -T db pg_dump -U postgres -d unngl -Fc > "unngl-$(date +%F).dump"
 ```
-
-Use `.backup`, not `cp`. The database runs in WAL mode, so a plain `cp` of a live
-file can capture a torn state. `.backup` takes a consistent snapshot safely.
 
 Keep a week of daily snapshots, off the machine. A day-old database is a day of
 messages; a lost database is all of them.
 
+On Supabase, daily backups are included on paid tiers; on the free tier, take
+your own with the command above, or point a free GitHub Actions cron at it.
+
 ## Upgrades
 
+On Vercel: redeploy, or let a new commit redeploy for you. Nothing to run by
+hand.
+
+With Docker or on a server:
+
 ```bash
-cd /srv/unngl
-sqlite3 data/unngl.sqlite ".backup '/tmp/pre-upgrade.sqlite'"
+pg_dump "$DATABASE_URL" -Fc -f /tmp/pre-upgrade.dump
 git pull
-npm ci
-npm run build
-sudo systemctl restart unngl
+docker compose up -d --build     # or: npm ci && npm run build && restart
 ```
 
-Schema changes are idempotent `CREATE TABLE IF NOT EXISTS` / `ALTER TABLE … ADD
-COLUMN` statements run at open time, so there is no separate migration step and
-nothing to run by hand. If the server does not come back up, restore the
-snapshot.
+Schema changes are idempotent `CREATE TABLE IF NOT EXISTS` statements recorded
+in a `schema_migrations` table and run at boot, so there is no separate
+migration step and nothing to run by hand. If the server does not come back up,
+restore the snapshot.
 
 ## Operating it
 
@@ -220,10 +247,11 @@ snapshot.
   user count in the response, and remember that in production that is
   reconnaissance.
 - On boot, the server audits its own configuration and prints a warning for
-  anything weak: a missing or short secret, `NEXT_PUBLIC_ORIGIN` not on HTTPS,
-  mail still going to the log, health detail on, HSTS on without HTTPS. It is
-  advice, not a blocker — read it once after your first deploy.
-- Logs are plain `console` output. There is no log file to rotate.
+  anything weak: a missing or short secret, `DATABASE_URL` unset or pointing at
+  localhost, `NEXT_PUBLIC_ORIGIN` not on HTTPS, mail still going to the log,
+  health detail on, HSTS on without HTTPS. It is advice, not a blocker — read it
+  once after your first deploy.
+- Logs are plain `console` output, which on Vercel means the function logs.
 - The hint-image sweep runs opportunistically on message creation: any photo
   older than `HINT_IMAGE_RETENTION_DAYS` (7) is deleted along with the row that
   points at it. No cron required. If the instance is idle, photos simply sit
@@ -232,13 +260,12 @@ snapshot.
 ## Hardening checklist
 
 - [ ] `SESSION_SECRET` random, ≥ 32 bytes, not in git
-- [ ] `NEXT_PUBLIC_ORIGIN` is `https://`
+- [ ] `NEXT_PUBLIC_ORIGIN` is `https://` and matches the real domain
 - [ ] TLS terminates in front; HTTP redirects to HTTPS
+- [ ] `DATABASE_URL` uses the **pooler**, port `6543`
 - [ ] Rebuilt with `ENABLE_HSTS=1` once the domain is permanent (build-time)
 - [ ] `TRUSTED_PROXY=1` **only** if a proxy you control is the sole path in
 - [ ] `EXPOSE_DEV_CODES` unset
 - [ ] `HEALTH_DETAIL` unset
 - [ ] `MAIL_TRANSPORT=smtp` if the instance is public
-- [ ] `.env` is `chmod 600` and owned by the service user
-- [ ] Daily `.backup` off the machine
-- [ ] `/srv/unngl/data` is not inside a world-readable web root
+- [ ] A daily `pg_dump` runs, off the machine

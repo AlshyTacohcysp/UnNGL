@@ -118,15 +118,15 @@ export default async function Home() {
               <p className="label text-ink-soft">The app this is an alternative to</p>
               <ul className="mt-4 flex flex-col gap-3">
                 <li className="flex gap-3">
-                  <span className="mt-1 block h-4 w-4 shrink-0 border-2 border-ink bg-punch" />
+                  <span className="mt-1 block h-4 w-4 shrink-0 border-[2.5px] border-ink bg-punch" />
                   <span>“Hints” are a paid in-app purchase, per message.</span>
                 </li>
                 <li className="flex gap-3">
-                  <span className="mt-1 block h-4 w-4 shrink-0 border-2 border-ink bg-punch" />
+                  <span className="mt-1 block h-4 w-4 shrink-0 border-[2.5px] border-ink bg-punch" />
                   <span>Many hints are vague, wrong, or not worth the price.</span>
                 </li>
                 <li className="flex gap-3">
-                  <span className="mt-1 block h-4 w-4 shrink-0 border-2 border-ink bg-punch" />
+                  <span className="mt-1 block h-4 w-4 shrink-0 border-[2.5px] border-ink bg-punch" />
                   <span>Closed source, ad-supported, and the FTC has gone after
                     practices around children’s data.</span>
                 </li>
@@ -137,15 +137,15 @@ export default async function Home() {
               <p className="label">UnNGL</p>
               <ul className="mt-4 flex flex-col gap-3">
                 <li className="flex gap-3">
-                  <span className="mt-1 block h-4 w-4 shrink-0 border-2 border-ink bg-ink" />
+                  <span className="mt-1 block h-4 w-4 shrink-0 border-[2.5px] border-ink bg-ink" />
                   <span>Every hint is free. There is no purchase button anywhere.</span>
                 </li>
                 <li className="flex gap-3">
-                  <span className="mt-1 block h-4 w-4 shrink-0 border-2 border-ink bg-ink" />
+                  <span className="mt-1 block h-4 w-4 shrink-0 border-[2.5px] border-ink bg-ink" />
                   <span>The algorithm is published, versioned and hash-checkable.</span>
                 </li>
                 <li className="flex gap-3">
-                  <span className="mt-1 block h-4 w-4 shrink-0 border-2 border-ink bg-ink" />
+                  <span className="mt-1 block h-4 w-4 shrink-0 border-[2.5px] border-ink bg-ink" />
                   <span>AGPL source. We hold nothing you can be sold, and hold it for
                     days, not years.</span>
                 </li>

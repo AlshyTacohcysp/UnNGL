@@ -100,23 +100,28 @@ const SCENES: Array<{
   },
 ];
 
-function main() {
-  const existing = findUserByEmail(EMAIL);
-  if (existing && listInboxesForUser(existing.id).length > 0) {
-    const inbox = listInboxesForUser(existing.id)[0]!;
+async function main() {
+  // A standalone script gets no `instrumentation.ts`, so the schema it needs
+  // has to be applied here or the first query fails with "relation does not
+  // exist".
+  const { initDb } = await import('../src/lib/db');
+  await initDb();
+  const existing = await findUserByEmail(EMAIL);
+  if (existing && (await listInboxesForUser(existing.id)).length > 0) {
+    const inbox = (await listInboxesForUser(existing.id))[0]!;
     console.log(`Demo already seeded. Sign in as ${EMAIL} and open /i/${inbox.slug}`);
     return;
   }
 
-  const user = upsertUserByEmail(EMAIL, 'Demo');
-  const inbox = existing ? listInboxesForUser(user.id)[0]?.slug : undefined;
-  const target = inbox ? getInboxBySlug(inbox)! : createInbox(user.id, 'demo page');
+  const user = await upsertUserByEmail(EMAIL, 'Demo');
+  const inbox = existing ? (await listInboxesForUser(user.id))[0]?.slug : undefined;
+  const target = inbox ? (await getInboxBySlug(inbox))! : await createInbox(user.id, 'demo page');
 
   for (const scene of SCENES) {
     const png = makePng(180, 180, scene.paint);
     const decoded = decodePng(png);
     const palette = extractPalette(decoded.data, decoded.width, decoded.height);
-    const post = postMessage({
+    const post = await postMessage({
       inboxSlug: target.slug,
       body: scene.body,
       ipHash: 'seed',
@@ -131,7 +136,7 @@ function main() {
     void post;
   }
 
-  const { code } = issueLoginCode(EMAIL, 'login');
+  const { code } = await issueLoginCode(EMAIL, 'login');
   console.log('');
   console.log(`  demo user : ${EMAIL}`);
   console.log(`  inbox     : /i/${target.slug}`);
@@ -139,4 +144,9 @@ function main() {
   console.log(`  login code: ${code}   (valid 10 minutes)`);
 }
 
-main();
+// Not `await main()`: tsx compiles this file to CommonJS, where top-level
+// await is a syntax error, and the failure only shows up when the script runs.
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

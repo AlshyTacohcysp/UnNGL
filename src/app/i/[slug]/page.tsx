@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 
 export default async function InboxPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const inbox = getInboxBySlug(slug);
+  const inbox = await getInboxBySlug(slug);
   if (!inbox) notFound();
 
   const userId = await currentUserId();
@@ -28,8 +28,8 @@ export default async function InboxPage({ params }: { params: Promise<{ slug: st
     notFound();
   }
 
-  const messages = listMessages(inbox.id);
-  if (messages.some((m) => !m.seen)) markAllSeen(inbox.id);
+  const messages = await listMessages(inbox.id);
+  if (messages.some((m) => !m.seen)) await markAllSeen(inbox.id);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">

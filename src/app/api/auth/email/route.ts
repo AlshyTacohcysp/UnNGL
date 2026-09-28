@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic';
 
 export const POST = route('auth.email', async (req: Request) => {
   const ip = await clientIp();
-  const limit = hit('login', ip, config.limits.loginAttemptsPerIpPer15Min);
+  const limit = await hit('login', ip, config.limits.loginAttemptsPerIpPer15Min);
   if (!limit.ok) {
     return fail('Too many attempts. Try again in a few minutes.', 429, {
       retryAfter: limit.retryAfterSeconds,
@@ -30,11 +30,11 @@ export const POST = route('auth.email', async (req: Request) => {
   const parsed = loginRequestSchema.safeParse(body);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Invalid request');
 
-  const limitPerAddress = hit('login', `addr:${parsed.data.email}`, 5);
+  const limitPerAddress = await hit('login', `addr:${parsed.data.email}`, 5);
   if (!limitPerAddress.ok) return fail('Too many codes requested for this address.', 429);
 
-  pruneLoginTokens();
-  const { code } = issueLoginCode(parsed.data.email, 'login');
+  await pruneLoginTokens();
+  const { code } = await issueLoginCode(parsed.data.email, 'login');
   const mail = buildLoginMail(parsed.data.email, code);
   await sendLoginCode(parsed.data.email, code, mail.url);
 

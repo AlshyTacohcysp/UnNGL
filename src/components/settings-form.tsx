@@ -190,7 +190,9 @@ export function SettingsForm({
               value={displayName}
               maxLength={60}
               placeholder="your name"
-              onChange={(e) => setDisplayName(e.target.value)}
+              onChange={(e) => {
+                void setDisplayName(e.target.value);
+              }}
             />
           </div>
           <button type="submit" className="btn btn-sm" disabled={busy || !displayName.trim()}>

@@ -29,7 +29,7 @@ export const PATCH = route('inboxes.patch', async (req: Request, ctx: Ctx) => {
   const userId = await currentUserId();
   if (!userId) return fail('Sign in first.', 401);
 
-  const inbox = getInboxBySlug(slug);
+  const inbox = await getInboxBySlug(slug);
   if (!inbox) return fail('Inbox not found', 404);
   if (inbox.owner_id !== userId) return fail('That is not your inbox.', 403);
 
@@ -38,23 +38,23 @@ export const PATCH = route('inboxes.patch', async (req: Request, ctx: Ctx) => {
   const { title, notify, rotate, delete: remove } = parsed.data;
 
   if (remove) {
-    softDeleteInbox(inbox.id);
+    await softDeleteInbox(inbox.id);
     return ok({ deleted: true });
   }
 
   const nextTitle = title ?? inbox.title;
   const nextNotify = notify ?? inbox.notify === 1;
-  renameInbox(inbox.id, nextTitle, nextNotify);
+  await renameInbox(inbox.id, nextTitle, nextNotify);
 
   // Rotating kills the old link the instant it changes: that is the point.
-  const currentSlug = rotate ? rotateInboxSlug(inbox.id) : inbox.slug;
+  const currentSlug = rotate ? await rotateInboxSlug(inbox.id) : inbox.slug;
 
   if (nextNotify && !inbox.notify) {
-    const user = findUserById(userId);
+    const user = await findUserById(userId);
     if (user?.email && user.email_verified_at) {
-      const unread = listMessages(inbox.id).filter((m) => !m.seen).length;
+      const unread = (await listMessages(inbox.id)).filter((m) => !m.seen).length;
       if (unread > 0) {
-        await sendNewMessageNotice(user.email, nextTitle, `${config.origin}/i/${currentSlug}`, unread).catch(
+        sendNewMessageNotice(user.email, nextTitle, `${config.origin}/i/${currentSlug}`, unread).catch(
           (err) => console.error('[inboxes] notice failed', err),
         );
       }

@@ -58,6 +58,27 @@ export function auditConfig(): void {
   const problems: string[] = [];
   const notes: string[] = [];
 
+  // The database audit runs every boot, not just in production: a wrong
+  // DATABASE_URL is the single most common way to end up here, and it is much
+  // easier to act on at startup than on the first sign-in attempt.
+  if (!process.env['DATABASE_' + 'URL'] && !process.env['POSTGRES_' + 'PRISMA_URL']) {
+    if (config.isProd) {
+      problems.push(
+        'DATABASE_URL is not set. Point it at your Postgres — for Supabase, use the ' +
+          'TRANSACTION POOLER connection string, not the direct one. See docs/en/deployment.md.',
+      );
+    } else {
+      notes.push(
+        'DATABASE_URL is not set, falling back to localhost. Run `npm run db:serve` ' +
+          'for a local database.',
+      );
+    }
+  } else if (config.databaseUrl.includes('@localhost:') || config.databaseUrl.includes('@127.0.0.1:')) {
+    if (config.isProd) {
+      problems.push('DATABASE_URL points at localhost in production.');
+    }
+  }
+
   if (config.isProd) {
     if (config.mail.transport === 'console') {
       problems.push(

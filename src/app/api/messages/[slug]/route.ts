@@ -22,9 +22,9 @@ export const dynamic = 'force-dynamic';
 type Ctx = { params: Promise<{ slug: string }> };
 
 export const GET = route('messages.list', async (_req: Request, ctx: Ctx) => {
-  maybePurge();
+  await maybePurge();
   const { slug } = await ctx.params;
-  const inbox = getInboxBySlug(slug);
+  const inbox = await getInboxBySlug(slug);
   if (!inbox) return fail('That link has expired or never existed.', 404);
 
   // GET is deliberately side-effect free: a cross-site <img> pointing here must
@@ -32,13 +32,13 @@ export const GET = route('messages.list', async (_req: Request, ctx: Ctx) => {
   // server when the owner opens the page, or via the POST below.
   return ok({
     inbox: { title: inbox.title, slug: inbox.slug, createdAt: inbox.created_at },
-    messages: listMessages(inbox.id),
+    messages: await listMessages(inbox.id),
   });
 });
 
 export const DELETE = route('messages.delete', async (req: Request, ctx: Ctx) => {
   const { slug } = await ctx.params;
-  const inbox = getInboxBySlug(slug);
+  const inbox = await getInboxBySlug(slug);
   if (!inbox) return fail('That link has expired or never existed.', 404);
 
   const userId = await currentUserId();
@@ -48,22 +48,22 @@ export const DELETE = route('messages.delete', async (req: Request, ctx: Ctx) =>
 
   const id = new URL(req.url).searchParams.get('id');
   if (!id) return fail('Missing message id');
-  const message = getMessage(id);
+  const message = await getMessage(id);
   if (!message || message.inbox_id !== inbox.id) return fail('Message not found', 404);
 
-  deleteMessage(id);
+  await deleteMessage(id);
   return ok({ deleted: id });
 });
 
 /** POST /api/messages/[slug]?id=… — mark a single message read. */
 export const POST = route('messages.seen', async (_req: Request, ctx: Ctx) => {
   const { slug } = await ctx.params;
-  const inbox = getInboxBySlug(slug);
+  const inbox = await getInboxBySlug(slug);
   if (!inbox) return fail('That link has expired or never existed.', 404);
   const id = new URL(_req.url).searchParams.get('id');
   if (!id) return fail('Missing message id');
-  const message = getMessage(id);
+  const message = await getMessage(id);
   if (!message || message.inbox_id !== inbox.id) return fail('Message not found', 404);
-  markSeen(id);
+  await markSeen(id);
   return ok({ seen: id });
 });

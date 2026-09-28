@@ -14,11 +14,11 @@ export const metadata: Metadata = {
 
 export default async function ClaimPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const message = findMessageByClaim(token);
+  const message = await findMessageByClaim(token);
   if (!message) notFound();
 
-  const inbox = getInboxById(message.inbox_id);
-  const hint = getHintForMessage(message.id);
+  const inbox = await getInboxById(message.inbox_id);
+  const hint = await getHintForMessage(message.id);
   const view = hint ? toHintView(hint) : null;
 
   return (

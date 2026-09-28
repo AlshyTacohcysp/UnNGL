@@ -28,7 +28,7 @@ export default async function SettingsPage() {
         email={user.email}
         verified={Boolean(user.email_verified_at)}
         palette={user.avatar_palette ? JSON.parse(user.avatar_palette) : null}
-        inboxCount={inboxCountForUser(user.id)}
+        inboxCount={await inboxCountForUser(user.id)}
       />
 
       <p className="mt-10 text-center text-sm">

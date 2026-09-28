@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": false,
   "license": "AGPL-3.0-or-later",
-  "description": "UnNGL — free, open source, privacy-first anonymous messages. The hint is the sender's whole colour palette.",
+  "description": "UnNGL \u2014 free, open source, privacy-first anonymous messages. The hint is the sender's whole colour palette.",
   "repository": {
     "type": "git",
     "url": "https://github.com/AlshyTacohcysp/UnNGL"
@@ -21,18 +21,24 @@
     "migrate": "tsx scripts/migrate.ts",
     "seed": "tsx --env-file-if-exists=.env.local --env-file-if-exists=.env scripts/seed-demo.ts",
     "samples": "tsx scripts/samples.ts",
-    "assets": "tsx scripts/assets.ts"
+    "assets": "tsx scripts/assets.ts",
+    "test:pg": "tsx scripts/pg-smoke.ts",
+    "db:serve": "tsx scripts/pg-server.mts",
+    "test:e2e": "tsx scripts/e2e.mts"
   },
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.2.5",
     "@fontsource/instrument-serif": "^5.2.5",
     "nanoid": "^5.0.9",
     "next": "^15.5.26",
+    "postgres": "^3.4.9",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-socket": "^0.2.11",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "^22.10.7",
     "@types/react": "^19.0.7",

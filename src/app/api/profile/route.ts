@@ -21,7 +21,7 @@ export const PATCH = route('profile.update', async (req: Request) => {
 
   const parsed = profileSchema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return fail('Invalid request');
-  if (parsed.data.displayName) setDisplayName(userId, parsed.data.displayName);
+  if (parsed.data.displayName) await setDisplayName(userId, parsed.data.displayName);
   return ok({ displayName: parsed.data.displayName ?? null });
 });
 
@@ -29,8 +29,8 @@ export const PATCH = route('profile.update', async (req: Request) => {
 export const GET = route('profile.get', async () => {
   const userId = await currentUserId();
   if (!userId) return fail('Sign in first.', 401);
-  const user = findUserById(userId)!;
-  const inboxCount = get<{ n: number }>('SELECT COUNT(*) AS n FROM inboxes WHERE owner_id = ?', userId);
+  const user = (await findUserById(userId))!;
+  const inboxCount = await get<{ n: number }>('SELECT COUNT(*) AS n FROM inboxes WHERE owner_id = ?', userId);
   return ok({
     user: {
       id: user.id,

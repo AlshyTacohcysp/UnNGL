@@ -16,7 +16,7 @@ Read the [threat model](#threat-model) before the [controls](#controls), and the
 |---|---|
 | `npm audit` (production) | **0 vulnerabilities** |
 | `npm audit` (including dev) | **0 vulnerabilities** |
-| Test suite | **64 passing** (18 algorithm, 46 security regression) |
+| Test suite | **74 passing** (18 algorithm, 56 security regression) |
 | TypeScript | clean, `strict` |
 | Security headers | CSP, HSTS (opt-in), `X-Frame-Options`, COOP, CORP, `nosniff`, `Referrer-Policy`, `Permissions-Policy` |
 | Runtime dependencies | 3 (`next`, `react`, `react-dom`, plus `zod`) |
@@ -44,7 +44,7 @@ disclosure, and you will be credited.
 | **Claim tokens** | The only credential a sender has. Leaking one exposes the message and lets the token holder rewrite the hint. |
 | **Message bodies** | Written by strangers, read by their target. Not encrypted at rest. |
 | **Hint source photos** | Faces. Deleted on a timer precisely because they are the most sensitive thing the app holds. |
-| **Server availability** | One process, one SQLite file. A single crash or a memory blow-up is an outage for everyone. |
+| **Server availability** | One stateless process, one shared database. A crash is an outage until it restarts; a bad deploy is an outage for everyone. |
 | **The instance itself** | SSRF into the host, a proxy hop into the private network, or the cloud metadata endpoint. |
 
 ### What we are *not* defending
@@ -62,7 +62,7 @@ disclosure, and you will be credited.
 ### Trust boundaries
 
 ```
-  anonymous sender  ──untrusted──▶  Next.js route handler  ──▶  SQLite (one file)
+  anonymous sender  ──untrusted──▶  Next.js route handler  ──▶  PostgreSQL (pooled)
         │                                │
         │ uploads bytes                  │ resolves the session
         ▼                                ▼
@@ -169,9 +169,21 @@ Anything else falls back to `/inbox`. Tested.
 
 ### 6. Rate limiting — fails closed
 
-`ratelimit.ts` is a SQLite counter table: bucket, window start, count. Buckets are
+`ratelimit.ts` is a counter table: bucket, window start, count. Buckets are
 per inbox (10 sends/hour) and per IP (30/hour), plus separate buckets for code
 requests, code verifications, inbox creation, and media fetches.
+
+The counter is incremented and read back in **one** statement — an upsert with
+`RETURNING` — and a login code's attempt counter is claimed the same way with
+`UPDATE … RETURNING`. This is not a micro-optimisation. The limiter was written
+when the database was a single SQLite connection, where a read followed by a
+write could not interleave with anything. A connection pool removes that
+guarantee: a dozen simultaneous sign-in attempts would each read `count = 0`,
+each conclude it was the first, and each be allowed, so the five-try limit in
+front of a six-digit code would be five tries *per burst* rather than five tries
+at all. `tests/security.test.ts` asserts both are single statements, and
+`npm run test:pg` runs eight concurrent attempts against a real PostgreSQL and
+checks that exactly five are allowed.
 
 The important part is what happens when the app **cannot** identify clients:
 
@@ -363,13 +375,14 @@ written in-repo precisely so that the attack surface of the dependency tree is
 small enough to audit by reading. See
 [architecture](architecture.md#dependencies).
 
-> **Self-hosters:** UnNGL uses Node's built-in `node:sqlite` rather than
-> `better-sqlite3`, so there is no native module to compile and no
-> `node-gyp` step — which also means no download of Node headers at install time.
+> **Self-hosters:** the Postgres driver is the pure-JavaScript `postgres`
+> package, not `pg` or `better-sqlite3`, so there is no native module to compile
+> and no `node-gyp` step — which also means no download of Node headers at
+> install time.
 
 ## Testing
 
-`tests/security.test.ts` holds 46 regression tests. Each corresponds either to a
+`tests/security.test.ts` holds 56 regression tests. Each corresponds either to a
 real defect that existed at some point, or to an attack the design must refuse.
 They are written to fail loudly if the protection is ever removed:
 
@@ -409,10 +422,11 @@ UnNGL can only enforce what it can see. These are yours:
 - [ ] **`TRUSTED_PROXY=1` only behind a proxy you control.** Otherwise leave it
       off and accept the shared rate-limit bucket.
 - [ ] **`.env` is `chmod 600`, owned by the service user.**
-- [ ] **The database file is not inside a world-readable web root.** It contains
-      message bodies, which are not encrypted at rest.
-- [ ] **Daily `.backup` off the machine.** See
-      [deployment](deployment.md#backups) — use `sqlite3 .backup`, not `cp`.
+- [ ] **The database is not reachable from the public internet.** On Supabase
+      that means the pooler URL, not the direct one. It contains message bodies,
+      which are not encrypted at rest.
+- [ ] **Daily `pg_dump` off the machine.** See
+      [deployment](deployment.md#backups) — use `pg_dump`, not `cp`.
 - [ ] **Back up `SESSION_SECRET`.** Rotating it logs everyone out and orphans
       every stored digest.
 - [ ] **Read the boot audit** after each deploy.
@@ -427,8 +441,9 @@ UnNGL can only enforce what it can see. These are yours:
 - **The palette is a hint, not a proof.** Someone who knows your colours can
   attach a photo that produces them. The verification proves the colours came from
   *the attached file*; it cannot prove the file is a picture of the sender.
-- **SQLite means one writer.** Under real load you want a different database,
-  which is a fork, not a setting.
+- **The free Supabase tier pauses after seven days of inactivity**, and the
+  first request after it wakes can take up to about half a minute. It is the
+  sharpest edge of the zero-cost deployment, and the only one.
 - **There is no abuse reporting pipeline.** Message text is not filtered. If you
   run a public instance you will eventually need moderation, and you should say so
   plainly on your own deployment.

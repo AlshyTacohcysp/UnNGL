@@ -26,7 +26,7 @@ export const POST = route('avatar.set', async (req: Request) => {
   if (file.size > config.limits.maxImageBytes) return fail('That image is too large. Try one under 2 MB.');
 
   try {
-    const result = saveAvatarPng(userId, new Uint8Array(await file.arrayBuffer()));
+    const result = await saveAvatarPng(userId, new Uint8Array(await file.arrayBuffer()));
     return ok({ palette: result.palette });
   } catch (err) {
     // Only a rejected file is a 400. An unexpected fault is ours, and must not be
@@ -40,8 +40,8 @@ export const DELETE = route('avatar.remove', async () => {
   const userId = await currentUserId();
   if (!userId) return fail('Sign in first.', 401);
   const { findUserById } = await import('@/lib/auth');
-  const user = findUserById(userId);
-  if (user?.avatar_image_id) deleteImage(user.avatar_image_id);
-  setUserAvatar(userId, null, null);
+  const user = await findUserById(userId);
+  if (user?.avatar_image_id) await deleteImage(user.avatar_image_id);
+  await setUserAvatar(userId, null, null);
   return ok({ removed: true });
 });

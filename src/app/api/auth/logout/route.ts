@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic';
 export const POST = route('auth.logout', async () => {
   const store = await cookies();
   const token = store.get(sessionCookieName())?.value;
-  destroySession(token);
+  await destroySession(token);
   const res = ok() as NextResponse;
   res.cookies.set(sessionCookieName(), '', { path: '/', maxAge: 0, secure: config.isProd });
   return res;

@@ -23,17 +23,17 @@ type Ctx = { params: Promise<{ token: string }> };
 
 export const GET = route('claim.get', async (_req: Request, ctx: Ctx) => {
   const { token } = await ctx.params;
-  const message = findMessageByClaim(token);
+  const message = await findMessageByClaim(token);
   if (!message) return fail('This claim link is not valid any more.', 404);
   return ok({ canAttach: true });
 });
 
 export const POST = route('claim.attach', async (req: Request, ctx: Ctx) => {
   const { token } = await ctx.params;
-  const message = findMessageByClaim(token);
+  const message = await findMessageByClaim(token);
   if (!message) return fail('This claim link is not valid any more.', 404);
 
-  if (!hit('media', `claim:${token}`, 10).ok) {
+  if (!(await hit('media', `claim:${token}`, 10)).ok) {
     return fail('Too many attempts on this link.', 429);
   }
 
@@ -50,7 +50,7 @@ export const POST = route('claim.attach', async (req: Request, ctx: Ctx) => {
   );
 
   try {
-    const view = attachHintToClaimedMessage(
+    const view = await attachHintToClaimedMessage(
       token,
       bytes,
       claimed.success ? claimed.data : null,

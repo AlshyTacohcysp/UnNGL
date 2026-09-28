@@ -19,7 +19,7 @@ export const GET = route(
   'media.fetch',
   async (req: Request) => {
     const ip = await clientIp();
-    if (!hit('media', ip, config.limits.mediaFetchesPerIpPerHour).ok) {
+    if (!(await hit('media', ip, config.limits.mediaFetchesPerIpPerHour)).ok) {
       return fail('Too many fetches from your connection. Try again later.', 429);
     }
 

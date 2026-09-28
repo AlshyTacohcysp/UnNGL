@@ -19,9 +19,9 @@ export interface AvatarResult {
 }
 
 /** Store a PNG as a user's avatar and derive its palette. */
-export function saveAvatarPng(userId: string, png: Uint8Array): AvatarResult {
+export async function saveAvatarPng(userId: string, png: Uint8Array): Promise<AvatarResult> {
   const analysis = analyzePng(png);
-  const stored = storeImage(png, { retainDays: null });
+  const stored = await storeImage(png, { retainDays: null });
   const palette = {
     colors: analysis.colors,
     primary: analysis.primary,
@@ -33,7 +33,7 @@ export function saveAvatarPng(userId: string, png: Uint8Array): AvatarResult {
       weight: analysis.weight,
     }),
   };
-  setUserAvatar(userId, stored.id, palette);
+  await setUserAvatar(userId, stored.id, palette);
   return { imageId: stored.id, palette };
 }
 
@@ -51,7 +51,7 @@ export async function maybeFetchAndStoreAvatar(
     // Normalise whatever the CDN sent into a PNG via the platform decoder is
     // not available server-side, so we only accept PNG and skip the rest.
     if (!isPngBytes(bytes)) return null;
-    return saveAvatarPng(userId, bytes);
+    return await saveAvatarPng(userId, bytes);
   } catch (err) {
     if (!(err instanceof MediaError)) console.error('[avatar] fetch failed', err);
     return null;

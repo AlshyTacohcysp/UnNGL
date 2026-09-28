@@ -15,7 +15,7 @@ type Params = { params: Promise<{ slug: string }> };
 /** Inbox links are private by nature: never index them, never cache them. */
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
-  const inbox = getInboxBySlug(slug);
+  const inbox = await getInboxBySlug(slug);
   return {
     title: inbox ? `A message for ${inbox.title}` : 'Message',
     robots: { index: false, follow: false, nocache: true },
@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 export default async function ComposePage({ params }: Params) {
   const { slug } = await params;
-  const inbox = getInboxBySlug(slug);
+  const inbox = await getInboxBySlug(slug);
   if (!inbox) notFound();
 
   // If this is the owner on their own link, show them their messages instead

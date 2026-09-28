@@ -16,7 +16,7 @@ export default async function InboxListPage() {
   const user = await currentUser();
   if (!user) redirect('/login?redirect=%2Finbox');
 
-  const inboxes = listInboxesForUser(user.id).map((i) => ({
+  const inboxes = (await listInboxesForUser(user.id)).map((i) => ({
     slug: i.slug,
     title: i.title,
     createdAt: i.created_at,

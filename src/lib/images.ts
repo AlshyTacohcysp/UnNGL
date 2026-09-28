@@ -10,7 +10,7 @@
  */
 
 import { nanoid } from 'nanoid';
-import { all, get, run } from './db';
+import { all, db, get, run, type Executor } from './db';
 import { config } from './config';
 import { decodePng, isPng, ImageError } from './palette/png';
 import { extractPalette, type Palette } from './palette/extract';
@@ -29,10 +29,11 @@ export interface ImageAnalysis extends Palette {
   source: 'png';
 }
 
-export function storeImage(
+export async function storeImage(
   bytes: Uint8Array,
   opts: { retainDays?: number | null; mime?: string } = {},
-): StoredImage {
+  t?: Executor,
+): Promise<StoredImage> {
   // Every rejection below is `ImageError` so a route can answer 400 with a
   // reason. A plain Error here would be indistinguishable from a server fault
   // and would surface as a generic 500 to a sender who did nothing wrong.
@@ -53,7 +54,11 @@ export function storeImage(
     opts.retainDays === null
       ? null
       : now + (opts.retainDays ?? config.retentionDays) * 86_400_000;
-  run(
+  // Honour the caller's transaction if there is one. Reaching for the pool
+  // from inside a transaction borrows a second connection: with a small pool
+  // that deadlocks, and with a large one it silently writes outside the
+  // transaction the caller believes is covering it.
+  await (t ?? db()).run(
     `INSERT INTO images (id, bytes, mime, width, height, bytes_len, created_at, delete_after)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
@@ -74,14 +79,14 @@ export function storeImage(
   };
 }
 
-export function readImage(id: string): { bytes: Buffer; mime: string } | undefined {
-  const row = get<{ bytes: Uint8Array; mime: string }>('SELECT bytes, mime FROM images WHERE id = ?', id);
+export async function readImage(id: string): Promise<{ bytes: Buffer; mime: string } | undefined> {
+  const row = await get<{ bytes: Uint8Array; mime: string }>('SELECT bytes, mime FROM images WHERE id = ?', id);
   if (!row) return undefined;
   return { bytes: Buffer.from(row.bytes), mime: row.mime };
 }
 
-export function deleteImage(id: string): void {
-  run('DELETE FROM images WHERE id = ?', id);
+export async function deleteImage(id: string, t?: Executor): Promise<void> {
+  await (t ?? db()).run('DELETE FROM images WHERE id = ?', id);
 }
 
 /**
@@ -95,21 +100,21 @@ export function analyzePng(bytes: Uint8Array): ImageAnalysis {
 }
 
 /** Delete images whose retention window has closed. Cheap enough to run hourly. */
-export function purgeExpiredImages(): number {
-  const rows = all<{ id: string }>('SELECT id FROM images WHERE delete_after IS NOT NULL AND delete_after < ?', Date.now());
-  for (const r of rows) deleteImage(r.id);
+export async function purgeExpiredImages(): Promise<number> {
+  const rows = await all<{ id: string }>('SELECT id FROM images WHERE delete_after IS NOT NULL AND delete_after < ?', Date.now());
+  for (const r of rows) await deleteImage(r.id);
   return rows.length;
 }
 
 let lastPurge = 0;
 
 /** Run the purge at most once an hour, opportunistically. */
-export function maybePurge(): void {
+export async function maybePurge(): Promise<void> {
   const now = Date.now();
   if (now - lastPurge < 3_600_000) return;
   lastPurge = now;
   try {
-    purgeExpiredImages();
+    await purgeExpiredImages();
   } catch (err) {
     console.error('[images] purge failed', err);
   }

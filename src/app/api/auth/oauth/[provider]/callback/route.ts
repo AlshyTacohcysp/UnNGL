@@ -76,24 +76,24 @@ export const GET = route(
     let userId: string | null = current;
 
     if (!userId) {
-      const linked = findUserByOAuth(provider.id, profile.providerUserId);
+      const linked = await findUserByOAuth(provider.id, profile.providerUserId);
       if (linked) {
         userId = linked.id;
       } else if (profile.email && profile.emailVerified) {
-        userId = upsertUserByEmail(profile.email, profile.displayName).id;
+        userId = (await upsertUserByEmail(profile.email, profile.displayName)).id;
       } else {
-        userId = createOAuthUser(profile.displayName).id;
+        userId = (await createOAuthUser(profile.displayName)).id;
       }
     }
 
-    linkOAuthAccount(userId, provider.id, profile.providerUserId, profile.username);
+    await linkOAuthAccount(userId, provider.id, profile.providerUserId, profile.username);
 
     // Adopt a verified email that the account is missing.
     if (profile.email && profile.emailVerified) {
-      const user = findUserByEmail(profile.email);
+      const user = await findUserByEmail(profile.email);
       if (!user || user.id === userId) {
         try {
-          addEmailToUser(userId, profile.email);
+          await addEmailToUser(userId, profile.email);
         } catch {
           /* email already owned by a different account: leave it alone */
         }
@@ -106,7 +106,7 @@ export const GET = route(
       await maybeFetchAndStoreAvatar(userId, profile.avatarUrl);
     }
 
-    const token = createSession(userId, await userAgent());
+    const token = await createSession(userId, await userAgent());
     const res = NextResponse.redirect(new URL(redirectTo, url.origin), 302);
     res.cookies.set(sessionCookieName(), token, sessionCookieOptions());
     res.cookies.set(STATE_COOKIE, '', { path: '/', maxAge: 0 });

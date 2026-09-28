@@ -9,7 +9,7 @@
  */
 
 import { customAlphabet } from 'nanoid';
-import { all, get, run, tx } from './db';
+import { all, db, get, run, tx, type Executor } from './db';
 import { digestToken, randomToken } from './crypto';
 import { createHintFromImage, getHintForMessage, toHintView, type HintView } from './hints';
 import { deleteImage } from './images';
@@ -45,19 +45,19 @@ export function newId(): string {
   return id();
 }
 
-function uniqueSlug(): string {
+async function uniqueSlug(): Promise<string> {
   for (let i = 0; i < 12; i++) {
     const s = slug();
-    if (!get('SELECT 1 FROM inboxes WHERE slug = ?', s)) return s;
+    if (!(await get('SELECT 1 FROM inboxes WHERE slug = ?', s))) return s;
   }
   throw new Error('could not allocate a unique slug');
 }
 
-export function createInbox(ownerId: string, title: string): Inbox {
+export async function createInbox(ownerId: string, title: string): Promise<Inbox> {
   const now = Date.now();
   const inboxId = newId();
-  const s = uniqueSlug();
-  run(
+  const s = await uniqueSlug();
+  await run(
     `INSERT INTO inboxes (id, owner_id, slug, title, notify, created_at) VALUES (?, ?, ?, ?, 0, ?)`,
     inboxId,
     ownerId,
@@ -65,21 +65,21 @@ export function createInbox(ownerId: string, title: string): Inbox {
     title,
     now,
   );
-  return getInboxBySlug(s)!;
+  return (await getInboxBySlug(s))!;
 }
 
-export function getInboxBySlug(slugValue: string): Inbox | undefined {
-  return get<Inbox>('SELECT * FROM inboxes WHERE slug = ? AND deleted_at IS NULL', slugValue);
+export async function getInboxBySlug(slugValue: string): Promise<Inbox | undefined> {
+  return await get<Inbox>('SELECT * FROM inboxes WHERE slug = ? AND deleted_at IS NULL', slugValue);
 }
 
-export function getInboxById(inboxId: string): Inbox | undefined {
-  return get<Inbox>('SELECT * FROM inboxes WHERE id = ? AND deleted_at IS NULL', inboxId);
+export async function getInboxById(inboxId: string): Promise<Inbox | undefined> {
+  return await get<Inbox>('SELECT * FROM inboxes WHERE id = ? AND deleted_at IS NULL', inboxId);
 }
 
-export function listInboxesForUser(ownerId: string): Array<
-  Inbox & { total: number; unread: number; last_body: string | null }
-> {
-  return all<Inbox & { total: number; unread: number; last_body: string | null }>(
+export async function listInboxesForUser(
+  ownerId: string,
+): Promise<Array<Inbox & { total: number; unread: number; last_body: string | null }>> {
+  return await all<Inbox & { total: number; unread: number; last_body: string | null }>(
     `SELECT i.*,
             (SELECT COUNT(*) FROM messages m WHERE m.inbox_id = i.id) AS total,
             (SELECT COUNT(*) FROM messages m WHERE m.inbox_id = i.id AND m.seen_at IS NULL) AS unread,
@@ -91,31 +91,31 @@ export function listInboxesForUser(ownerId: string): Array<
   );
 }
 
-export function inboxCountForUser(ownerId: string): number {
-  const row = get<{ n: number }>(
+export async function inboxCountForUser(ownerId: string): Promise<number> {
+  const row = await get<{ n: number }>(
     'SELECT COUNT(*) AS n FROM inboxes WHERE owner_id = ? AND deleted_at IS NULL',
     ownerId,
   );
   return Number(row?.n ?? 0);
 }
 
-export function renameInbox(inboxId: string, title: string, notify: boolean): void {
-  run('UPDATE inboxes SET title = ?, notify = ? WHERE id = ?', title, notify ? 1 : 0, inboxId);
+export async function renameInbox(inboxId: string, title: string, notify: boolean): Promise<void> {
+  await run('UPDATE inboxes SET title = ?, notify = ? WHERE id = ?', title, notify ? 1 : 0, inboxId);
 }
 
-export function rotateInboxSlug(inboxId: string): string {
+export async function rotateInboxSlug(inboxId: string): Promise<string> {
   const s = uniqueSlug();
-  run('UPDATE inboxes SET slug = ? WHERE id = ?', s, inboxId);
+  await run('UPDATE inboxes SET slug = ? WHERE id = ?', s, inboxId);
   return s;
 }
 
-export function softDeleteInbox(inboxId: string): void {
-  run('UPDATE inboxes SET deleted_at = ? WHERE id = ?', Date.now(), inboxId);
-  run(
+export async function softDeleteInbox(inboxId: string): Promise<void> {
+  await run('UPDATE inboxes SET deleted_at = ? WHERE id = ?', Date.now(), inboxId);
+  await run(
     `DELETE FROM hints WHERE message_id IN (SELECT id FROM messages WHERE inbox_id = ?)`,
     inboxId,
   );
-  run('DELETE FROM messages WHERE inbox_id = ?', inboxId);
+  await run('DELETE FROM messages WHERE inbox_id = ?', inboxId);
 }
 
 /* ------------------------------------------------------------------ *
@@ -132,20 +132,20 @@ export interface MessageView {
   claimToken?: string;
 }
 
-export function listMessages(inboxId: string): MessageView[] {
-  const rows = all<Message>(
+export async function listMessages(inboxId: string): Promise<MessageView[]> {
+  const rows = await all<Message>(
     'SELECT * FROM messages WHERE inbox_id = ? ORDER BY created_at DESC, id DESC',
     inboxId,
   );
-  return rows.map((m) => toView(m));
+  return Promise.all(rows.map((m) => toView(m)));
 }
 
-export function getMessage(idValue: string): Message | undefined {
-  return get<Message>('SELECT * FROM messages WHERE id = ?', idValue);
+export async function getMessage(idValue: string, t?: Executor): Promise<Message | undefined> {
+  return (t ?? db()).get<Message>('SELECT * FROM messages WHERE id = ?', idValue);
 }
 
-function toView(m: Message): MessageView {
-  const hint = getHintForMessage(m.id);
+async function toView(m: Message, t?: Executor): Promise<MessageView> {
+  const hint = await getHintForMessage(m.id, t);
   return {
     id: m.id,
     body: m.body,
@@ -155,20 +155,20 @@ function toView(m: Message): MessageView {
   };
 }
 
-export function markAllSeen(inboxId: string): number {
-  const res = run('UPDATE messages SET seen_at = ? WHERE inbox_id = ? AND seen_at IS NULL', Date.now(), inboxId);
+export async function markAllSeen(inboxId: string): Promise<number> {
+  const res = await run('UPDATE messages SET seen_at = ? WHERE inbox_id = ? AND seen_at IS NULL', Date.now(), inboxId);
   return res.changes;
 }
 
-export function markSeen(messageId: string): void {
-  run('UPDATE messages SET seen_at = ? WHERE id = ? AND seen_at IS NULL', Date.now(), messageId);
+export async function markSeen(messageId: string): Promise<void> {
+  await run('UPDATE messages SET seen_at = ? WHERE id = ? AND seen_at IS NULL', Date.now(), messageId);
 }
 
-export function deleteMessage(messageId: string): void {
+export async function deleteMessage(messageId: string): Promise<void> {
   // The photo behind a hint goes with it; the palette goes with the message.
-  const hint = getHintForMessage(messageId);
-  if (hint?.image_id) deleteImage(hint.image_id);
-  run('DELETE FROM messages WHERE id = ?', messageId);
+  const hint = await getHintForMessage(messageId);
+  if (hint?.image_id) await deleteImage(hint.image_id);
+  await run('DELETE FROM messages WHERE id = ?', messageId);
 }
 
 export interface PostMessageInput {
@@ -189,16 +189,16 @@ export interface PostMessageResult {
 }
 
 /** Store a message (and its hint, if any) atomically. */
-export function postMessage(input: PostMessageInput): PostMessageResult {
-  const inbox = getInboxBySlug(input.inboxSlug);
+export async function postMessage(input: PostMessageInput): Promise<PostMessageResult> {
+  const inbox = await getInboxBySlug(input.inboxSlug);
   if (!inbox) throw new Error('inbox not found');
 
   const now = Date.now();
   const messageId = newId();
   const claimToken = randomToken(24);
 
-  tx(() => {
-    run(
+  await tx(async (t) => {
+    await t.run(
       `INSERT INTO messages (id, inbox_id, body, created_at, sender_ip, sender_agent, claim_hash)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       messageId,
@@ -206,46 +206,48 @@ export function postMessage(input: PostMessageInput): PostMessageResult {
       input.body,
       now,
       input.ipHash,
-      input.userAgent,
+      input.userAgent ?? null,
       digestToken(claimToken),
     );
     if (input.imageBytes && input.imageBytes.length > 0) {
-      createHintFromImage(messageId, input.imageBytes, input.claimedPalette, input.source ?? 'upload');
+      // A hint without its photo would be a lie, so the palette is derived
+      // inside the same transaction: either both land or neither does.
+      await createHintFromImage(messageId, input.imageBytes, input.claimedPalette, input.source ?? 'upload', t);
     }
-    run('UPDATE inboxes SET last_message_at = ? WHERE id = ?', now, inbox.id);
+    await t.run('UPDATE inboxes SET last_message_at = ? WHERE id = ?', now, inbox.id);
   });
 
-  const message = getMessage(messageId)!;
+  const message = (await getMessage(messageId))!;
   return {
-    message: { ...toView(message), claimToken },
+    message: { ...(await toView(message)), claimToken },
     claimToken,
-    inbox: getInboxBySlug(input.inboxSlug)!,
+    inbox: (await getInboxBySlug(input.inboxSlug))!,
   };
 }
 
 /** Attach (or replace) the hint on a message the sender still holds a claim for. */
-export function attachHintToClaimedMessage(
+export async function attachHintToClaimedMessage(
   claimToken: string,
   imageBytes: Uint8Array,
   claimedPalette: unknown,
   source: string,
-): MessageView | null {
+): Promise<MessageView | null> {
   const hash = digestToken(claimToken);
-  const msg = get<Message>('SELECT * FROM messages WHERE claim_hash = ?', hash);
+  const msg = await get<Message>('SELECT * FROM messages WHERE claim_hash = ?', hash);
   if (!msg) return null;
-  return tx(() => {
-    const existing = getHintForMessage(msg.id);
+  return await tx(async (t) => {
+    const existing = await getHintForMessage(msg.id, t);
     if (existing) {
       // One palette per message keeps the public spec simple: replacing the
       // photo replaces the palette, and the old photo goes with it.
-      if (existing.image_id) deleteImage(existing.image_id);
-      run('DELETE FROM hints WHERE id = ?', existing.id);
+      if (existing.image_id) await deleteImage(existing.image_id, t);
+      await t.run('DELETE FROM hints WHERE id = ?', existing.id);
     }
-    createHintFromImage(msg.id, imageBytes, claimedPalette, source);
-    return toView(getMessage(msg.id)!);
+    await createHintFromImage(msg.id, imageBytes, claimedPalette, source, t);
+    return toView((await getMessage(msg.id, t))!, t);
   });
 }
 
-export function findMessageByClaim(claimToken: string): Message | undefined {
-  return get<Message>('SELECT * FROM messages WHERE claim_hash = ?', digestToken(claimToken));
+export async function findMessageByClaim(claimToken: string): Promise<Message | undefined> {
+  return await get<Message>('SELECT * FROM messages WHERE claim_hash = ?', digestToken(claimToken));
 }

@@ -42,7 +42,30 @@ const securityHeaders = [
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
-  output: 'standalone',
+
+  // Vercel builds and runs the app itself; `output: 'standalone'` only matters
+  // to the Docker image and to `npm start` on a server. Leaving it on is
+  // harmless on Vercel but confusing, so it follows the target: set
+  // DEPLOY_TARGET=vercel to drop it.
+  ...(process.env.DEPLOY_TARGET === 'vercel' ? {} : { output: 'standalone' }),
+
+  // The Postgres driver speaks the wire protocol over a raw TCP socket and
+  // reaches for node:tls, node:crypto and node:stream. Webpack cannot resolve
+  // those Node builtins from inside it, so the bundle fails to build with
+  // MODULE_NOT_FOUND. Keeping the package external makes Node require it at
+  // runtime, where those builtins simply exist.
+  serverExternalPackages: ['postgres'],
+
+  webpack(config, { isServer }) {
+    if (isServer) {
+      // `serverExternalPackages` covers the route and server-component
+      // compilations, but the instrumentation hook is bundled in a layer of its
+      // own, and the driver is pulled in from there too. Name it external in
+      // every server compilation rather than fixing one layer and hoping.
+      config.externals = [...(config.externals ?? []), 'postgres'];
+    }
+    return config;
+  },
 
   // HSTS is decided at BUILD time, because next.config is not present in the
   // standalone output — an ENABLE_HSTS value exported only at runtime is
@@ -51,23 +74,6 @@ const nextConfig = {
   // a nonsensical combination (HSTS on a plain-HTTP origin, or vice versa).
   env: {
     UNNGL_HSTS: process.env.ENABLE_HSTS === '1' ? '1' : '0',
-  },
-
-  // Never trace runtime state into the standalone output.
-  //
-  // Next's file tracer follows anything referenced from the app, and the
-  // database path is read at runtime, so `data/unngl.sqlite` was ending up
-  // copied into .next/standalone. That is the directory people copy to a
-  // server, and .dockerignore hides the problem in a Docker build but not in a
-  // plain one: the image — or the tarball — would ship the developer's local
-  // messages, and a fresh instance would start against a stale database.
-  //
-  // The glob is '/**' rather than '*': a bare '*' also matches Next's own
-  // internal routes, and excluding against those strips files out of the
-  // traced copy of the `next` package and produces a standalone server that
-  // dies on startup with MODULE_NOT_FOUND.
-  outputFileTracingExcludes: {
-    '/**': ['data/**', '**/*.sqlite', '**/*.sqlite-wal', '**/*.sqlite-shm'],
   },
 
   experimental: {

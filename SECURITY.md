@@ -15,7 +15,7 @@ get a response, and you will be credited.
 | | |
 |---|---|
 | `npm audit` | **0 vulnerabilities** (production and full tree) |
-| Tests | **64 passing** — 18 algorithm, 46 security regression |
+| Tests | **74 passing** — 18 algorithm, 56 security regression |
 | TypeScript | clean, `strict` |
 | Runtime dependencies | `next`, `react`, `react-dom`, `zod` |
 
@@ -46,7 +46,7 @@ token)`. In production the cookie is `__Host-unngl_session`: `HttpOnly`, `Secure
 mutating methods and returns 403 otherwise. Centralised, so a new route cannot
 forget it.
 
-**Rate limiting** — per inbox and per IP, in a SQLite counter table that survives
+**Rate limiting** — per inbox and per IP, in a database counter table that survives
 restarts. **Fails closed**: without `TRUSTED_PROXY` the app cannot identify
 clients and shares one bucket, because a limiter that can be bypassed by setting a
 header is worse than none.

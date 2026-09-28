@@ -3,15 +3,13 @@
 # ---------------------------------------------------------------------------
 # UnNGL — multi-stage, standalone Next.js output on a slim Node image.
 #
-# The whole service is one process and one SQLite file. Mount a volume at
-# /app/data and back it up with `sqlite3 .backup` (see docker-compose.yml).
+# The service is stateless: the database is a remote Postgres, so there is no
+# volume to mount and nothing to back up here. Set DATABASE_URL to point at
+# one — Supabase's transaction pooler, or the `db` service in
+# docker-compose.yml.
 #
-# Two things about this image worth knowing before you use it:
-#   * it runs as uid 1001, so a bind-mounted ./data must be chowned to 1001,
-#     or the container cannot create its SQLite -wal/-shm files and will exit.
-#     The compose file uses a named volume, which avoids this entirely.
-#   * node:22-alpine is required for node:sqlite. It is built into Node from
-#     22.5; there is no native module to compile and nothing to install.
+# Run it as uid 1001. Nothing on disk needs to be writable, so there is no
+# bind-mount ownership trap to walk into.
 # ---------------------------------------------------------------------------
 
 FROM node:22-alpine AS deps
@@ -41,8 +39,7 @@ WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
-    HOSTNAME=0.0.0.0 \
-    DATABASE_PATH=/app/data/unngl.sqlite
+    HOSTNAME=0.0.0.0
 
 RUN addgroup -g 1001 -S unngl \
  && adduser -u 1001 -S unngl -G unngl
@@ -51,9 +48,10 @@ COPY --from=builder --chown=unngl:unngl /app/.next/standalone ./
 COPY --from=builder --chown=unngl:unngl /app/.next/static ./.next/static
 COPY --from=builder --chown=unngl:unngl /app/public ./public
 
-RUN mkdir -p /app/data && chown -R unngl:unngl /app/data
+# The container refuses to start without a database URL, rather than coming up
+# healthy and 500ing on every request.
+ENV DATABASE_URL=postgres://postgres:postgres@db:5432/unngl
 USER unngl
-VOLUME ["/app/data"]
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

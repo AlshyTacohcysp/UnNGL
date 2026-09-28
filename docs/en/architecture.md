@@ -1,7 +1,7 @@
 # Architecture
 
-About 8,700 lines of TypeScript, one process, one SQLite file, and a dependency
-list small enough to read in one sitting. This page explains how it fits together
+About 8,700 lines of TypeScript, one process, one PostgreSQL database, and a
+dependency list small enough to read in one sitting. This page explains how it fits together
 and, where there was a choice, why that choice was made.
 
 ## The shape of the system
@@ -27,7 +27,7 @@ and, where there was a choice, why that choice was made.
                    │
               equality?  →  verified hint
                    │
-              node:sqlite  (one file, WAL)
+              postgres  (network, pooled)
 ```
 
 The single most important structural fact: **`src/lib/palette/extract.ts` is
@@ -62,7 +62,7 @@ enough to read. The dependency tree's attack surface is zero by construction.
 | Password hashing (`bcrypt`, `argon2`) | `lib/crypto.ts` (HMAC digests) | ~60 |
 | Styling framework | Tailwind v4 + ~700 lines of CSS | — |
 | Fonts | Fontsource packages, vendored | — |
-| Database driver (`better-sqlite3`) | `node:sqlite` (built in) | 0 |
+| Database driver (`pg`, `better-sqlite3`) | `postgres` (pure JS, no native build) | ~1k |
 | Date library | `Date` | 0 |
 
 ## Data model
@@ -191,10 +191,20 @@ a permissive provider.
 
 ## Rate limiting
 
-`lib/ratelimit.ts` is a SQLite counter table: a bucket name, a window start, a
-count. Buckets are per-IP and per-inbox, both hourly. It works across restarts
-and across instances that share the database, which a pure in-memory limiter does
+`lib/ratelimit.ts` is a counter table: a bucket name, a window start, a count.
+Buckets are per-IP and per-inbox, both hourly. It works across restarts and
+across instances that share the database, which a pure in-memory limiter does
 not.
+
+The counter is read and incremented in **one** statement, an upsert with
+`RETURNING`. A read-then-write was correct while the database was a single
+SQLite connection, and stops being correct the moment there is a pool: two
+simultaneous logins would both read `count = 0`, both be told they were the
+first, and both be let through. The same reasoning is why `consumeLoginCode`
+claims an attempt with `UPDATE … RETURNING` rather than selecting and then
+updating. The login bucket is the only thing between an attacker and the email
+sign-in, so it is the one place in the app where "check then act" is not good
+enough.
 
 It **fails closed**: with `TRUSTED_PROXY` unset, the app cannot identify clients,
 so every request shares one bucket rather than pretending it can rate-limit
@@ -233,14 +243,14 @@ six colours, so the identity and the product are the same object.
 ## Testing
 
 ```bash
-npm test        # 64 tests
+npm test        # 74 tests
 npm run typecheck
 ```
 
 - `tests/palette.test.ts` — 18 tests over the algorithm, including a golden hash
   (`26d88308`) that pins the output for a fixed input, plus edge cases: greyscale,
   fully transparent, single colour, 1×1, non-square.
-- `tests/security.test.ts` — 46 tests covering the hardening: same-origin
+- `tests/security.test.ts` — 56 tests covering the hardening: same-origin
   enforcement, token digests, session cookie naming, secret strength, the PNG
   bomb bounds, SSRF allowlisting, response byte caps, and the health endpoint's
   disclosure rules.
@@ -253,4 +263,5 @@ npm run typecheck
   because the app makes none. Fonts are vendored, images are never hotlinked, and
   nothing is embedded.
 - **No rate-limiting library, no auth library, no image library.** See above.
-- **No multi-tenancy.** One SQLite file, one writer. Horizontal scale is a fork.
+- **No multi-tenancy.** One database, and the schema assumes a single logical
+  instance rather than designing for many. Horizontal scale is a fork.

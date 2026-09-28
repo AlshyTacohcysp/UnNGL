@@ -34,6 +34,7 @@ export async function register(): Promise<void> {
     process.exit(1);
   }
 
-  const { getDb } = await import('@/lib/db');
-  getDb();
+  // Connect and apply any pending migrations before the first request.
+  const { initDb } = await import('@/lib/db');
+  await initDb();
 }

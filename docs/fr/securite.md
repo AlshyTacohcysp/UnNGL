@@ -18,7 +18,7 @@ déployer.
 |---|---|
 | `npm audit` (production) | **0 vulnérabilité** |
 | `npm audit` (y compris le développement) | **0 vulnérabilité** |
-| Suite de tests | **64 réussis** (18 algorithme, 46 régression sécurité) |
+| Suite de tests | **74 réussis** (18 algorithme, 56 régression sécurité) |
 | TypeScript | propre, `strict` |
 | En-têtes de sécurité | CSP, HSTS (optionnel), `X-Frame-Options`, COOP, CORP, `nosniff`, `Referrer-Policy`, `Permissions-Policy` |
 | Dépendances de runtime | 3 (`next`, `react`, `react-dom`, plus `zod`) |
@@ -46,7 +46,7 @@ délai raisonnable avant la publication, et vous serez crédité.
 | **Jetons de réclamation** | Seul identifiant dont dispose un expéditeur. Le divulguer expose le message et permet d'en réécrire l'indice. |
 | **Corps des messages** | Écrits par des inconnus, lus par leur destinataire. Non chiffrés au repos. |
 | **Photos source des indices** | Des visages. Supprimées par minuterie précisément parce que c'est ce que l'application a de plus sensible. |
-| **Disponibilité du service** | Un processus, un fichier SQLite. Un seul plantage ou un pic mémoire est une panne pour tout le monde. |
+| **Disponibilité du service** | Un processus sans état, une base partagée. Un plantage est une panne jusqu'au redémarrage ; un mauvais déploiement est une panne pour tout le monde. |
 | **L'instance elle-même** | Un SSRF vers l'hôte, un saut via le proxy vers le réseau privé, ou l'endpoint de métadonnées du cloud. |
 
 ### Ce que nous ne défendons pas
@@ -66,7 +66,7 @@ délai raisonnable avant la publication, et vous serez crédité.
 ### Frontières de confiance
 
 ```
-  expéditeur anonyme  ──non fiable──▶  gestionnaire de routes Next.js  ──▶  SQLite (un fichier)
+  expéditeur anonyme  ──non fiable──▶  gestionnaire de routes Next.js  ──▶  PostgreSQL (poolé)
         │                                     │
         │ téléverse des octets               │ résout la session
         ▼                                     ▼
@@ -183,10 +183,23 @@ Tout le reste retombe sur `/inbox`. Testé.
 
 ### 6. Limitation de débit — échoue fermé
 
-`ratelimit.ts` est une table de compteurs SQLite : compartiment, début de fenêtre,
+`ratelimit.ts` est une table de compteurs : compartiment, début de fenêtre,
 compteur. Les compartiments sont par boîte (10 envois/heure) et par IP
 (30/heure), plus des compartiments distincts pour les demandes de code, les
 vérifications de code, la création de boîtes et les récupérations de médias.
+
+Le compteur est incrémenté et relu en **une seule** instruction — un `upsert` avec
+`RETURNING` — et le compteur de tentatives d'un code de connexion est réclamé de
+la même façon par un `UPDATE … RETURNING`. Ce n'est pas une micro-optimisation.
+La limitation a été écrite quand la base était un unique fichier SQLite, où une
+lecture suivie d'une écriture ne pouvait pas s'entrelacer avec quoi que ce soit.
+Un pool de connexions supprime cette garantie : une douzaine de tentatives de
+connexion simultanées liraient chacune `count = 0`, chacune se croirait la
+première, et chacune serait acceptée — la limite de cinq essais devant un code à
+six chiffres serait donc de cinq essais *par rafale* plutôt que cinq essais en
+tout. `tests/security.test.ts` vérifie que les deux sont des instructions uniques,
+et `npm run test:pg` lance huit tentatives concurrentes sur un vrai PostgreSQL et
+contrôle que exactement cinq sont acceptées.
 
 L'essentiel est ce qui se passe quand l'application **ne peut pas** identifier
 ses clients :
@@ -388,14 +401,14 @@ requêtes HTTP — sont écrites dans le dépôt précisément pour que la surfa
 d'attaque de l'arbre de dépendances soit assez petite pour être auditée par
 lecture. Voir [architecture](architecture.md#les-dépendances).
 
-> **Auto-hébergeurs :** UnNGL utilise le module `node:sqlite` intégré à Node
-> plutôt que `better-sqlite3`, donc il n'y a aucun module natif à compiler et
+> **Auto-hébergeurs :** le pilote PostgreSQL est le paquet `postgres` en
+> JavaScript pur, et non `pg` ou `better-sqlite3` : il n'y a aucun module natif à compiler et
 > aucune étape `node-gyp` — ce qui signifie aussi aucun téléchargement d'en-têtes
 > Node à l'installation.
 
 ## Tests
 
-`tests/security.test.ts` contient 46 tests de régression. Chacun correspond soit
+`tests/security.test.ts` contient 56 tests de régression. Chacun correspond soit
 à un vrai défaut ayant existé, soit à une attaque que la conception doit refuser.
 Ils sont écrits pour échouer bruyamment si la protection est un jour retirée :
 
@@ -439,11 +452,11 @@ UnNGL ne peut appliquer que ce qu'il voit. Ces points sont les vôtres :
       Sinon, laissez-le désactivé et acceptez le compartiment de limitation
       partagé.
 - [ ] **`.env` en `chmod 600`, détenu par l'utilisateur du service.**
-- [ ] **Le fichier de base de données n'est pas dans une racine web lisible par
-      tous.** Il contient des corps de messages, non chiffrés au repos.
-- [ ] **`.backup` quotidien hors de la machine.** Voir
-      [déploiement](deploiement.md#sauvegardes) — utilisez `sqlite3 .backup`,
-      pas `cp`.
+- [ ] **La base de données n'est pas accessible depuis Internet.** Sur Supabase,
+      cela veut dire l'URL du pooler, pas la connexion directe. Elle contient des
+      corps de messages, non chiffrés au repos.
+- [ ] **`pg_dump` quotidien hors de la machine.** Voir
+      [déploiement](deploiement.md#sauvegardes) — utilisez `pg_dump`, pas `cp`.
 - [ ] **Sauvegardez `SESSION_SECRET`.** Le faire tourner déconnecte tout le monde
       et orpheline toutes les empreintes stockées.
 - [ ] **Lisez l'audit au démarrage** après chaque déploiement.
@@ -459,8 +472,9 @@ UnNGL ne peut appliquer que ce qu'il voit. Ces points sont les vôtres :
   couleurs peut joindre une photo qui les produit. La vérification prouve que les
   couleurs viennent *du fichier joint* ; elle ne peut pas prouver que ce fichier
   est une photo de l'expéditeur.
-- **SQLite signifie un seul écrivain.** Sous une vraie charge, vous voudrez une
-  autre base : c'est un fork, pas un réglage.
+- **Le palier gratuit de Supabase se met en veille après sept jours
+  d'inactivité**, et la première requête au réveil peut prendre une trentaine de
+  secondes. C'est l'angle vif du déploiement à coût zéro, et le seul.
 - **Il n'y a aucune chaîne de signalement d'abus.** Le texte des messages n'est
   pas filtré. Si vous exploitez une instance publique, vous finirez par avoir
   besoin de modération, et vous devriez le dire clairement sur votre propre

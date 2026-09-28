@@ -14,15 +14,37 @@ npm install
 npm run dev
 ```
 
-Node 22.5 ou plus récent est requis — UnNGL utilise le `node:sqlite` intégré,
-donc aucun module natif à compiler. Si `npm install` tente de lancer `node-gyp`,
-quelque chose cloche ; il ne le devrait pas.
+Node 22 ou plus récent est requis — le pilote PostgreSQL est le paquet `postgres`,
+en JavaScript pur, donc aucun module natif à compiler. Si `npm install` tente de
+lancer `node-gyp`, quelque chose cloche ; il ne le devrait pas.
 
 ```bash
 npm test          # doit réussir
 npm run typecheck # doit réussir
 npm run build     # doit réussir
 ```
+
+```bash
+npm run test:pg   # la couche de données face à un vrai PostgreSQL
+```
+
+`npm test` vérifie le source ; `npm run test:pg` exécute le vrai pilote, la vraie
+réécriture des `?` et le vrai DDL contre un vrai PostgreSQL (PGlite, servi par
+le protocole réseau, dans le processus). C'est ce qui attrape une requête qui
+compile, qui passe le typage, et qui n'est pas du SQL Postgres valide. Si vous
+touchez `lib/db.ts`, le schéma ou quoi que ce soit qui parle à la base, lancez-le.
+
+```bash
+npm run db:serve &   # un vrai PostgreSQL dans ce processus
+npm run dev &
+npm run test:e2e     # tout le produit, en HTTP
+```
+
+`npm run test:e2e` pilote une instance en cours d'exécution comme le ferait un
+navigateur : connexion, création de boîte, envoi d'une photo, relecture de
+l'indice, réclamation, remplacement, renommage, déconnexion. C'est le seul
+contrôle qui couvre tout le chemin de bout en bout, et celui qui aurait attrapé
+la couche de données rendue asynchrone au mauvais endroit.
 
 Les trois sont attendus avant d'ouvrir une pull request.
 

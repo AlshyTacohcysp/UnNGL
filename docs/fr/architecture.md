@@ -1,6 +1,6 @@
 # Architecture
 
-Environ 8 700 lignes de TypeScript, un processus, un fichier SQLite, et une
+Environ 8 700 lignes de TypeScript, un processus, une base PostgreSQL, et une
 liste de dépendances assez courte pour être lue d'un trait. Cette page explique
 comment tout s'assemble et, là où il y avait un choix, pourquoi ce choix-là.
 
@@ -27,7 +27,7 @@ comment tout s'assemble et, là où il y avait un choix, pourquoi ce choix-là.
                    │
               égalité ?  →  indice vérifié
                    │
-              node:sqlite  (un fichier, WAL)
+              postgres  (réseau, pool de connexions)
 ```
 
 Le fait structurel le plus important : **`src/lib/palette/extract.ts` est importé
@@ -64,7 +64,7 @@ l'arbre de dépendances est nulle par construction.
 | Hachage de mots de passe (`bcrypt`, `argon2`) | `lib/crypto.ts` (empreintes HMAC) | ~60 |
 | Framework CSS | Tailwind v4 + ~700 lignes de CSS | — |
 | Polices | paquets Fontsource, embarqués | — |
-| Pilote de base (`better-sqlite3`) | `node:sqlite` (intégré) | 0 |
+| Pilote de base (`pg`, `better-sqlite3`) | `postgres` (JS pur, sans build natif) | ~1k |
 | Bibliothèque de dates | `Date` | 0 |
 
 ## Modèle de données
@@ -199,11 +199,21 @@ permissif.
 
 ## Limitation de débit
 
-`lib/ratelimit.ts` est une table de compteurs SQLite : nom de compartiment, début
-de fenêtre, compteur. Les compartiments sont par IP et par boîte de réception,
+`lib/ratelimit.ts` est une table de compteurs : nom de compartiment, début de
+fenêtre, compteur. Les compartiments sont par IP et par boîte de réception,
 toutes deux sur une base horaire. Elle fonctionne au travers des redémarrages et
 des instances partageant la base, ce qu'une limitation purement en mémoire ne
 fait pas.
+
+Le compteur est lu et incrémenté dans **une seule** instruction, un `upsert` avec
+`RETURNING`. Un lire-puis-écrire était correct tant que la base était un unique
+fichier SQLite, et cesse de l'être dès qu'il y a un pool de connexions : deux
+connexions simultanées liraient chacune `count = 0`, chacune seCroirait la
+première, et les deux seraient acceptées. C'est la même raison qui fait que
+`consumeLoginCode` réclame une tentative par `UPDATE … RETURNING` plutôt que de
+sélectionner puis de mettre à jour. Le compartiment de connexion est la seule
+chose entre un attaquant et la connexion par e-mail ; « vérifier puis agir » n'y
+suffit pas.
 
 Elle **échoue fermé** : sans `TRUSTED_PROXY`, l'application ne peut pas identifier
 ses clients, donc chaque requête partage un compartiment au lieu de prétendre
@@ -246,7 +256,7 @@ six couleurs : l'identité et le produit sont le même objet.
 ## Tests
 
 ```bash
-npm test        # 64 tests
+npm test        # 74 tests
 npm run typecheck
 ```
 
@@ -254,7 +264,7 @@ npm run typecheck
   référence (`26d88308`) qui fige la sortie pour une entrée donnée, plus les cas
   limites : niveaux de gris, entièrement transparent, monochrome, 1×1,
   non-carré.
-- `tests/security.test.ts` — 46 tests couvrant le durcissement : enforcement
+- `tests/security.test.ts` — 56 tests couvrant le durcissement : enforcement
   same-origin, empreintes de jetons, nommage du cookie de session, robustesse du
   secret, bornes anti-bombes PNG, liste blanche SSRF, plafonds d'octets en
   réponse, et règles de divulgation du endpoint de santé.
@@ -268,5 +278,6 @@ npm run typecheck
   embarquées, les images ne sont jamais liées à chaud, et rien n'est intégré.
 - **Aucune bibliothèque de limitation de débit, d'authentification ou
   d'image.** Voir plus haut.
-- **Pas de multi-tenants.** Un fichier SQLite, un seul écrivain. La mise à
+- **Pas de multi-tenants.** Une base de données, et un schéma qui suppose une
+  seule instance logique plutôt que d'en concevoir beaucoup. La mise à
   l'échelle horizontale est un fork.

@@ -2,12 +2,12 @@
 
 ## Prérequis
 
-- **Node 22.5 ou plus récent.** C'est la seule exigence ferme, et elle n'est pas
-  arbitraire : UnNGL utilise le module `node:sqlite` intégré à Node, donc aucun
-  module natif à compiler et aucun serveur de base de données à lancer. Sur les
-  versions 22.5 à 22.x, vous verrez un unique `ExperimentalWarning` concernant
-  SQLite au démarrage ; l'application le masque en interne.
-- Rien d'autre. Ni PostgreSQL, ni Redis, ni Docker, ni compte cloud.
+- **Node 22 ou plus récent.**
+- **Une base PostgreSQL.** En production, c'est le palier gratuit de Supabase. En
+  développement, il n'y a rien à installer : `npm run db:serve` démarre un vrai
+  PostgreSQL dans le même processus, servi par le protocole réseau, donc
+  l'application s'y connecte avec le même pilote que celui qu'elle utilisera en
+  production.
 
 Vérifiez votre version :
 
@@ -21,12 +21,22 @@ node -v
 git clone https://github.com/AlshyTacohcysp/UnNGL
 cd UnNGL
 npm install
-npm run build
-npm start
+cp .env.example .env.local
+
+# Terminal 1 — un vrai PostgreSQL, en mémoire, pour la durée de ce lancement.
+npm run db:serve
+
+# Terminal 2 — l'application.
+npm run dev
 ```
 
-Ouvrez <http://localhost:3000>. Il n'y a aucune étape de configuration : un
-dépôt tout neuf fonctionne.
+Ouvrez <http://localhost:3000>. Le schéma est créé automatiquement à la première
+connexion.
+
+> **Contre une vraie base de données :** mettez `DATABASE_URL` dans
+> `.env.local` sur n'importe quel PostgreSQL 14 ou plus récent, et passez la
+> commande `npm run db:serve`. Celle-ci garde ses données en mémoire et démarre
+> donc vide à chaque fois.
 
 > **Mode développement** (rechargement automatique, et le code de connexion
 > affiché dans l'interface) :
@@ -103,7 +113,7 @@ le relancer sans risque.
 | `npm run dev` | serveur de développement avec rechargement à chaud, port 3000 |
 | `npm run build` | build de production |
 | `npm start` | serveur de production (sortie standalone si buildée, sinon `next start`) |
-| `npm test` | la suite de tests complète (64 tests) |
+| `npm test` | la suite de tests complète (74 tests) |
 | `npm run typecheck` | TypeScript, sans émission |
 | `npm run seed` | créer le compte et la boîte de démonstration |
 | `npm run samples` | régénérer les palettes d'exemple des pages marketing |
@@ -139,7 +149,7 @@ src/
       extract.ts  L'ALGORITHME — s'exécute dans le navigateur et sur le serveur
       png.ts      décodeur PNG sans dépendance (la voie de vérification)
       client.ts   chaîne d'envoi côté navigateur
-    db.ts         node:sqlite, migrations, sans ORM
+    db.ts         postgres, migrations, sans ORM
     auth.ts       utilisateurs, sessions, codes e-mail
     hints.ts      création et vérification d'un indice
     inbox.ts      boîtes, messages, jetons de réclamation

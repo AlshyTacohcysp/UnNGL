@@ -2,11 +2,11 @@
 
 ## Requirements
 
-- **Node 22.5 or newer.** That is the only hard requirement, and it is not
-  arbitrary: UnNGL uses Node's built-in `node:sqlite`, so there is no native
-  module to compile and no database server to run. On 22.5–22.x you will see one
-  `ExperimentalWarning` about SQLite at boot; the app silences it internally.
-- Nothing else. No PostgreSQL, no Redis, no Docker, no cloud account.
+- **Node 22 or newer.**
+- **A PostgreSQL database.** In production that is Supabase's free tier. For
+  development you do not need to install anything: `npm run db:serve` starts a
+  real PostgreSQL in the same process, served over the wire protocol, so the app
+  connects to it through the same driver it uses in production.
 
 Check your version:
 
@@ -20,12 +20,21 @@ node -v
 git clone https://github.com/AlshyTacohcysp/UnNGL
 cd UnNGL
 npm install
-npm run build
-npm start
+cp .env.example .env.local
+
+# Terminal 1 — a real PostgreSQL, in memory, for as long as this runs.
+npm run db:serve
+
+# Terminal 2 — the app.
+npm run dev
 ```
 
-Open <http://localhost:3000>. There is no configuration step: a fresh checkout
-runs.
+Open <http://localhost:3000>. The schema is created automatically the first time
+the app connects.
+
+> **Against a real database instead:** point `DATABASE_URL` in `.env.local` at
+> any PostgreSQL 14 or newer and skip `npm run db:serve`. The local one keeps
+> its data in memory, so it starts empty every time.
 
 > **Development mode** (auto-reload, and the login code shown in the UI):
 > ```bash
@@ -95,7 +104,7 @@ code, the inbox link and the public composer link. Re-running it is safe.
 | `npm run dev` | development server with hot reload, on port 3000 |
 | `npm run build` | production build |
 | `npm start` | production server (standalone output if built, else `next start`) |
-| `npm test` | the full test suite (64 tests) |
+| `npm test` | the full test suite (74 tests) |
 | `npm run typecheck` | TypeScript, no emit |
 | `npm run seed` | create the demo account and inbox |
 | `npm run samples` | regenerate the example palettes in the marketing pages |
@@ -131,7 +140,7 @@ src/
       extract.ts  THE ALGORITHM — runs in the browser and on the server
       png.ts      dependency-free PNG decoder (the verification path)
       client.ts   browser upload pipeline
-    db.ts         node:sqlite, migrations, no ORM
+    db.ts         postgres, migrations, no ORM
     auth.ts       users, sessions, email codes
     hints.ts      creating and verifying a hint
     inbox.ts      inboxes, messages, claim tokens

@@ -9,11 +9,16 @@ out/
 build/
 next-env.d.ts
 
-# Runtime data — the SQLite database and any uploaded blobs live here
+# Runtime data. The database is a remote Postgres now, so this only covers
+# what a local run can still leave behind.
 data/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+
+# The local development database (npm run db:serve) is in memory, but a
+# file-backed PGlite data directory should never be committed either.
+.pgdata/
 
 # Environment
 .env

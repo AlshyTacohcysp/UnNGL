@@ -5,7 +5,6 @@
  * @license AGPL-3.0-or-later
  */
 
-import path from 'node:path';
 
 const bool = (v: string | undefined, dflt: boolean) =>
   v === undefined ? dflt : /^(1|true|yes|on)$/i.test(v);
@@ -57,8 +56,21 @@ export const config = {
     const raw = runtimeEnv('NEXT_PUBLIC_' + 'ORIGIN') ?? 'http://localhost:3000';
     return raw.replace(/\/+$/, '');
   },
-  get databasePath() {
-    return process.env.DATABASE_PATH ?? path.join(process.cwd(), 'data', 'unngl.sqlite');
+  /**
+   * Postgres connection string. On Vercel this is the POSTGRES_PRISMA_URL or
+   * DATABASE_URL environment variable Supabase provides; use the *transaction
+   * pooler* URL (port 5432 direct, 6543 pooled) for a serverless deployment.
+   */
+  get databaseUrl() {
+    return (
+      runtimeEnv('DATABASE_' + 'URL') ??
+      runtimeEnv('POSTGRES_' + 'PRISMA_URL') ??
+      'postgres://unngl:unngl@localhost:5432/unngl'
+    );
+  },
+  /** Pool size. Small on purpose: free tiers cap concurrent connections. */
+  get dbPoolMax() {
+    return Number(process.env.DB_POOL_MAX ?? 3);
   },
   get sessionSecret() {
     return required('SESSION_SECRET', 'dev-only-insecure-session-secret-change-me');

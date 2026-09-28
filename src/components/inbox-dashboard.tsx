@@ -129,7 +129,7 @@ export function InboxDashboard({ inboxes }: { inboxes: InboxSummary[] }) {
 
       {items.length === 0 ? (
         <div className="card p-10 text-center">
-          <p className="serif-accent text-3xl">no inboxes yet.</p>
+          <p className="display-md">No inboxes yet.</p>
           <p className="mt-2 text-ink-soft">Make one above and share the link.</p>
         </div>
       ) : (

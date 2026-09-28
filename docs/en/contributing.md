@@ -13,7 +13,7 @@ npm install
 npm run dev
 ```
 
-Node 22.5 or newer is required — UnNGL uses the built-in `node:sqlite`, so there
+Node 22 or newer is required — the database is PostgreSQL over the network, so there
 is no native module to compile. If `npm install` tries to run `node-gyp`,
 something is wrong; it should not.
 
@@ -24,6 +24,27 @@ npm run build     # must pass
 ```
 
 All three are expected before you open a pull request.
+
+```bash
+npm run test:pg   # the data layer against a real PostgreSQL
+```
+
+`npm test` asserts on source; `npm run test:pg` runs the real driver, the real
+`?`-rewriting and the real DDL against a real PostgreSQL (PGlite, served over
+the wire protocol, in-process). It is what catches a query that compiles,
+type-checks and is not valid Postgres. If you touch `lib/db.ts`, the schema or
+anything that talks to the database, run it.
+
+```bash
+npm run db:serve &   # a real PostgreSQL in this process
+npm run dev &
+npm run test:e2e     # the whole product over HTTP
+```
+
+`npm run test:e2e` drives a running instance the way a browser would: sign in,
+create an inbox, send a photo, read the hint back, claim it, replace it, rename,
+sign out. It is the only check that covers the whole path end to end, and the
+one that would have caught the data layer being async in the wrong places.
 
 ## What is useful
 

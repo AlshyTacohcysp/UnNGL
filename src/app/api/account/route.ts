@@ -19,8 +19,8 @@ export const DELETE = route('account.delete', async () => {
   const userId = await currentUserId();
   if (!userId) return fail('Sign in first.', 401);
 
-  const user = findUserById(userId);
-  const images = all<{ id: string }>(
+  const user = await findUserById(userId);
+  const images = await all<{ id: string }>(
     `SELECT i.id FROM images i
       WHERE i.id IN (SELECT avatar_image_id FROM users WHERE id = ?)
          OR i.id IN (SELECT h.image_id FROM hints h
@@ -31,12 +31,12 @@ export const DELETE = route('account.delete', async () => {
     userId,
   );
 
-  run('DELETE FROM users WHERE id = ?', userId);
-  for (const image of images) deleteImage(image.id);
+  await run('DELETE FROM users WHERE id = ?', userId);
+  for (const image of images) await deleteImage(image.id);
   if (user?.avatar_image_id && !images.some((i) => i.id === user.avatar_image_id)) {
-    deleteImage(user.avatar_image_id);
+    await deleteImage(user.avatar_image_id);
   }
-  destroyAllSessions(userId);
+  await destroyAllSessions(userId);
 
   return ok({ deleted: true });
 });

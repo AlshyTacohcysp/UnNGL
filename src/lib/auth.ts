@@ -14,7 +14,7 @@
 
 import { cookies } from 'next/headers';
 import { nanoid } from 'nanoid';
-import { get, run } from './db';
+import { all, get, run } from './db';
 import { config } from './config';
 import { digestCode, digestToken, loginCode, normalizeEmail, randomToken, safeEqual } from './crypto';
 
@@ -50,27 +50,27 @@ const USER_COLUMNS =
  * Users
  * ------------------------------------------------------------------ */
 
-export function findUserById(id: string): User | undefined {
-  return get<User>(`SELECT ${USER_COLUMNS} FROM users WHERE id = ?`, id);
+export async function findUserById(id: string): Promise<User | undefined> {
+  return await get<User>(`SELECT ${USER_COLUMNS} FROM users WHERE id = ?`, id);
 }
 
-export function findUserByEmail(email: string): User | undefined {
-  return get<User>(`SELECT ${USER_COLUMNS} FROM users WHERE email = ?`, normalizeEmail(email));
+export async function findUserByEmail(email: string): Promise<User | undefined> {
+  return await get<User>(`SELECT ${USER_COLUMNS} FROM users WHERE email = ?`, normalizeEmail(email));
 }
 
 /** Find or create a user for a verified email address. */
-export function upsertUserByEmail(email: string, displayName?: string | null): User {
+export async function upsertUserByEmail(email: string, displayName?: string | null): Promise<User> {
   const now = Date.now();
   const norm = normalizeEmail(email);
-  const existing = findUserByEmail(norm);
+  const existing = await findUserByEmail(norm);
   if (existing) {
     if (!existing.email_verified_at) {
-      run('UPDATE users SET email_verified_at = ?, updated_at = ? WHERE id = ?', now, now, existing.id);
+      await run('UPDATE users SET email_verified_at = ?, updated_at = ? WHERE id = ?', now, now, existing.id);
     }
-    return findUserById(existing.id)!;
+    return (await findUserById(existing.id))!;
   }
   const id = nanoid(16);
-  run(
+  await run(
     `INSERT INTO users (id, email, email_verified_at, display_name, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?)`,
     id,
@@ -80,14 +80,14 @@ export function upsertUserByEmail(email: string, displayName?: string | null): U
     now,
     now,
   );
-  return findUserById(id)!;
+  return (await findUserById(id))!;
 }
 
 /** Create a user that has no email yet (OAuth-only until they add one). */
-export function createOAuthUser(displayName: string | null): User {
+export async function createOAuthUser(displayName: string | null): Promise<User> {
   const now = Date.now();
   const id = nanoid(16);
-  run(
+  await run(
     `INSERT INTO users (id, email, display_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
     id,
     null,
@@ -95,17 +95,17 @@ export function createOAuthUser(displayName: string | null): User {
     now,
     now,
   );
-  return findUserById(id)!;
+  return (await findUserById(id))!;
 }
 
-export function addEmailToUser(userId: string, email: string): void {
+export async function addEmailToUser(userId: string, email: string): Promise<void> {
   const norm = normalizeEmail(email);
   const now = Date.now();
-  const clash = findUserByEmail(norm);
+  const clash = await findUserByEmail(norm);
   if (clash && clash.id !== userId) {
     throw new Error('That email is already linked to another account.');
   }
-  run(
+  await run(
     'UPDATE users SET email = ?, email_verified_at = ?, updated_at = ? WHERE id = ?',
     norm,
     now,
@@ -114,8 +114,8 @@ export function addEmailToUser(userId: string, email: string): void {
   );
 }
 
-export function setUserAvatar(userId: string, imageId: string | null, palette: unknown): void {
-  run(
+export async function setUserAvatar(userId: string, imageId: string | null, palette: unknown): Promise<void> {
+  await run(
     'UPDATE users SET avatar_image_id = ?, avatar_palette = ?, updated_at = ? WHERE id = ?',
     imageId,
     palette === null ? null : JSON.stringify(palette),
@@ -124,30 +124,30 @@ export function setUserAvatar(userId: string, imageId: string | null, palette: u
   );
 }
 
-export function setDisplayName(userId: string, name: string): void {
-  run('UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?', name, Date.now(), userId);
+export async function setDisplayName(userId: string, name: string): Promise<void> {
+  await run('UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?', name, Date.now(), userId);
 }
 
 /* ------------------------------------------------------------------ *
  * OAuth account linking
  * ------------------------------------------------------------------ */
 
-export function findUserByOAuth(provider: string, providerUserId: string): User | undefined {
-  const row = get<{ user_id: string }>(
+export async function findUserByOAuth(provider: string, providerUserId: string): Promise<User | undefined> {
+  const row = await get<{ user_id: string }>(
     'SELECT user_id FROM oauth_accounts WHERE provider = ? AND provider_user_id = ?',
     provider,
     providerUserId,
   );
-  return row ? findUserById(row.user_id) : undefined;
+  return row ? await findUserById(row.user_id) : undefined;
 }
 
-export function linkOAuthAccount(
+export async function linkOAuthAccount(
   userId: string,
   provider: string,
   providerUserId: string,
   username: string | null,
-): void {
-  run(
+): Promise<void> {
+  await run(
     `INSERT INTO oauth_accounts (provider, provider_user_id, user_id, username, created_at)
      VALUES (?, ?, ?, ?, ?)
      ON CONFLICT(provider, provider_user_id) DO UPDATE SET user_id = excluded.user_id`,
@@ -168,13 +168,13 @@ export interface IssuedCode {
   expiresAt: number;
 }
 
-export function issueLoginCode(email: string, purpose: 'login' | 'add_email'): IssuedCode {
+export async function issueLoginCode(email: string, purpose: 'login' | 'add_email'): Promise<IssuedCode> {
   const norm = normalizeEmail(email);
   const code = loginCode();
   const now = Date.now();
   // One live code per address+purpose: requesting a new one invalidates the old.
-  run('DELETE FROM login_tokens WHERE email = ? AND purpose = ?', norm, purpose);
-  run(
+  await run('DELETE FROM login_tokens WHERE email = ? AND purpose = ?', norm, purpose);
+  await run(
     `INSERT INTO login_tokens (id, email, code_hash, purpose, attempts, created_at, expires_at)
      VALUES (?, ?, ?, ?, 0, ?, ?)`,
     nanoid(12),
@@ -190,42 +190,54 @@ export function issueLoginCode(email: string, purpose: 'login' | 'add_email'): I
 export type CodeResult = { status: 'ok'; user: User } | { status: 'invalid' } | { status: 'locked' };
 
 /** Consume a login code. Codes are single-use and burn an attempt on failure. */
-export function consumeLoginCode(email: string, code: string, purpose: 'login' | 'add_email'): CodeResult {
+export async function consumeLoginCode(email: string, code: string, purpose: 'login' | 'add_email'): Promise<CodeResult> {
   const norm = normalizeEmail(email);
-  const row = get<{ id: string; code_hash: string; attempts: number; expires_at: number }>(
-    'SELECT id, code_hash, attempts, expires_at FROM login_tokens WHERE email = ? AND purpose = ?',
-    norm,
-    purpose,
-  );
+  // Claim this attempt and read the token back in one statement. Doing it as a
+  // SELECT followed by an UPDATE would let a handful of parallel guesses all
+  // read `attempts = 0` and all be counted as the first, so the five-try limit
+  // in front of a six-digit code would be five tries per burst rather than five
+  // tries at all.
+  const row = (
+    await all<{ id: string; code_hash: string; attempts: number; expires_at: number }>(
+      `UPDATE login_tokens SET attempts = attempts + 1
+        WHERE id = (SELECT id FROM login_tokens WHERE email = ? AND purpose = ?)
+        RETURNING id, code_hash, attempts, expires_at`,
+      norm,
+      purpose,
+    )
+  )[0];
+
   if (!row) return { status: 'invalid' };
   if (Date.now() > Number(row.expires_at)) {
-    run('DELETE FROM login_tokens WHERE id = ?', row.id);
+    await run('DELETE FROM login_tokens WHERE id = ?', row.id);
     return { status: 'invalid' };
   }
-  if (Number(row.attempts) >= MAX_CODE_ATTEMPTS) {
-    run('DELETE FROM login_tokens WHERE id = ?', row.id);
+  // `attempts` already includes the attempt being made right now, so this
+  // rejects the sixth guess — the same point the previous read-then-write
+  // version did.
+  if (Number(row.attempts) > MAX_CODE_ATTEMPTS) {
+    await run('DELETE FROM login_tokens WHERE id = ?', row.id);
     return { status: 'locked' };
   }
   if (!safeEqual(row.code_hash, digestCode(norm, code))) {
-    run('UPDATE login_tokens SET attempts = attempts + 1 WHERE id = ?', row.id);
     return { status: 'invalid' };
   }
-  run('DELETE FROM login_tokens WHERE id = ?', row.id);
-  return { status: 'ok', user: upsertUserByEmail(norm) };
+  await run('DELETE FROM login_tokens WHERE id = ?', row.id);
+  return { status: 'ok', user: await upsertUserByEmail(norm) };
 }
 
-export function pruneLoginTokens(): void {
-  run('DELETE FROM login_tokens WHERE expires_at < ?', Date.now() - 60 * 60 * 1000);
+export async function pruneLoginTokens(): Promise<void> {
+  await run('DELETE FROM login_tokens WHERE expires_at < ?', Date.now() - 60 * 60 * 1000);
 }
 
 /* ------------------------------------------------------------------ *
  * Sessions
  * ------------------------------------------------------------------ */
 
-export function createSession(userId: string, userAgent: string | null): string {
+export async function createSession(userId: string, userAgent: string | null): Promise<string> {
   const token = randomToken(32);
   const now = Date.now();
-  run(
+  await run(
     'INSERT INTO sessions (id, user_id, created_at, expires_at, user_agent) VALUES (?, ?, ?, ?, ?)',
     digestToken(token),
     userId,
@@ -236,27 +248,27 @@ export function createSession(userId: string, userAgent: string | null): string 
   return token;
 }
 
-export function sessionUserId(token: string | undefined): string | null {
+export async function sessionUserId(token: string | undefined): Promise<string | null> {
   if (!token) return null;
-  const row = get<{ user_id: string; expires_at: number }>(
+  const row = await get<{ user_id: string; expires_at: number }>(
     'SELECT user_id, expires_at FROM sessions WHERE id = ?',
     digestToken(token),
   );
   if (!row) return null;
   if (Date.now() > Number(row.expires_at)) {
-    run('DELETE FROM sessions WHERE id = ?', digestToken(token));
+    await run('DELETE FROM sessions WHERE id = ?', digestToken(token));
     return null;
   }
   return row.user_id;
 }
 
-export function destroySession(token: string | undefined): void {
+export async function destroySession(token: string | undefined): Promise<void> {
   if (!token) return;
-  run('DELETE FROM sessions WHERE id = ?', digestToken(token));
+  await run('DELETE FROM sessions WHERE id = ?', digestToken(token));
 }
 
-export function destroyAllSessions(userId: string): void {
-  run('DELETE FROM sessions WHERE user_id = ?', userId);
+export async function destroyAllSessions(userId: string): Promise<void> {
+  await run('DELETE FROM sessions WHERE user_id = ?', userId);
 }
 
 export function sessionCookieName(): string {
@@ -281,12 +293,12 @@ async function sessionToken(): Promise<string | undefined> {
 
 /** The signed-in user for this request, or null. */
 export async function currentUser(): Promise<User | null> {
-  const id = sessionUserId(await sessionToken());
-  return id ? (findUserById(id) ?? null) : null;
+  const id = await sessionUserId(await sessionToken());
+  return id ? ((await findUserById(id)) ?? null) : null;
 }
 
 export async function currentUserId(): Promise<string | null> {
-  return sessionUserId(await sessionToken());
+  return await sessionUserId(await sessionToken());
 }
 
 export function sessionCookieOptions() {

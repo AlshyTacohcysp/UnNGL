@@ -27,7 +27,7 @@ UnNGL inverse le rapport sur tous les axes :
 | Pouvez-vous le vérifier ? | non | oui — recalculez-le vous-même ; la spécification est publique |
 | Que deviennent les photos | stockées, et vendues | supprimées 7 jours après extraction de la palette |
 | Adresses IP | stockées | jamais stockées en clair ; une empreinte HMAC tronquée par message |
-| Code source | fermé | AGPL-3.0, auto-hébergeable, un seul fichier SQLite |
+| Code source | fermé | AGPL-3.0, auto-hébergeable, une seule base PostgreSQL |
 
 **Pourquoi une palette est un bon indice.** Pour quelqu'un qui *vous connaît*, six
 couleurs issues de votre photo de profil constituent une empreinte impossible à

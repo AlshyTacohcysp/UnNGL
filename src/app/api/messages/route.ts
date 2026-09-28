@@ -37,12 +37,12 @@ const readImage = async (form: FormData): Promise<Uint8Array | null> => {
 };
 
 export const POST = route('messages.send', async (req: Request) => {
-  maybePurge();
-  pruneRateLimits();
+  await maybePurge();
+  await pruneRateLimits();
   const url = new URL(req.url);
   const slug = url.searchParams.get('to') ?? '';
 
-  const inbox = getInboxBySlug(slug);
+  const inbox = await getInboxBySlug(slug);
   // Answer identically for unknown inboxes so links can't be probed.
   if (!inbox) return fail('That link has expired or never existed.', 404);
 
@@ -58,10 +58,10 @@ export const POST = route('messages.send', async (req: Request) => {
   if (parsed.data.website) return fail('That message could not be delivered.', 202);
 
   const ip = await clientIp();
-  if (!hit('send', `inbox:${inbox.id}`, config.limits.sendsPerInboxPerHour).ok) {
+  if (!(await hit('send', `inbox:${inbox.id}`, config.limits.sendsPerInboxPerHour)).ok) {
     return fail('This inbox has had a lot of messages today. Try again later.', 429);
   }
-  if (!hit('send', `ip:${ip}`, config.limits.sendsPerIpPerHour).ok) {
+  if (!(await hit('send', `ip:${ip}`, config.limits.sendsPerIpPerHour)).ok) {
     return fail('You have sent a lot of messages recently. Try again in an hour.', 429);
   }
 
@@ -78,7 +78,7 @@ export const POST = route('messages.send', async (req: Request) => {
   }
 
   try {
-    const result = postMessage({
+    const result = await postMessage({
       inboxSlug: inbox.slug,
       body: parsed.data.body,
       ipHash: ip,
