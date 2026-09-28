@@ -67,7 +67,7 @@ enough to read. The dependency tree's attack surface is zero by construction.
 
 ## Data model
 
-Eleven tables. Full definitions are in `src/lib/db.ts`, applied as numbered,
+Twelve tables. Full definitions are in `src/lib/db.ts`, applied as numbered,
 idempotent migrations at open time — there is no separate migration step and
 nothing to run by hand.
 
@@ -77,15 +77,51 @@ nothing to run by hand.
 | `oauth_accounts` | the OAuth side | `(provider, provider_user_id)`, `user_id` |
 | `sessions` | one row per live session | `id` = **HMAC digest** of the cookie, `expires_at` |
 | `login_tokens` | 6-digit email codes | `code_hash`, `purpose`, `attempts`, `expires_at` |
-| `inboxes` | the public composer | `slug`, `owner_id`, `title`, `last_message_at` |
+| `inboxes` | the public composer | `slug`, `owner_id`, **`handle`**, `title`, `last_message_at` |
 | `messages` | one row per anonymous message | `body`, `sender_ip` (hashed), `seen_at`, `hint_id`, `claim_hash` |
 | `hints` | the palette and its proof | `palette`, `primary_hex`, `weight`, `hash`, `algorithm`, `verified`, `image_id` |
 | `images` | hint source photos, as BLOBs | `bytes`, `mime`, `bytes_len`, `delete_after` |
+| `handle_aliases` | retired handles, so a shared link survives a rename | `handle` → `inbox_id` |
 | `rate_limits` | counters | `key`, `window_start`, `count` |
 | `meta`, `schema_migrations` | bookkeeping | |
 
 The claim token is not its own table: it is `messages.claim_hash`, an HMAC of the
 token in `/h/[token]`, resolved by lookup. One less table, one less thing to join.
+
+### Slug and handle
+
+An inbox has two public names, and the distinction is the point.
+
+The **slug** is the credential. It is 12 characters of entropy, generated,
+never chosen, and valid for as long as the inbox exists. Everything that
+depends on the URL being unguessable depends on this.
+
+The **handle** is a name a person picked — `amina.k`. It changes, it is
+public, and it is not a secret. It exists because a slug cannot be read
+aloud, typed from a screenshot, or put in a bio.
+
+Both address the same inbox, so `/{x}` resolves in three steps, all on an
+index:
+
+1. a live **handle** — what a person chose
+2. a **retired handle**, via `handle_aliases` — so a link shared before a
+   rename keeps resolving
+3. a **slug** — every link ever shared, and the fallback for inboxes that
+   have never been named
+
+Handle is checked before slug on purpose: the reverse order would let an
+unrelated inbox holding the old slug value shadow a rename.
+
+Renaming writes the old name to `handle_aliases` in the same statement as the
+update, so "the name changed" and "the old link still works" are one fact
+rather than two that can disagree. Handing a name back to the same inbox
+clears the alias instead of burning the name forever.
+
+Migration 2 only **adds** the column. It does not invent names for the
+inboxes that already exist: a random twelve-character slug cannot be turned
+into something a person would have chosen, and backfilling one would put
+`xk39d2` in a public URL while calling it a chosen handle. Existing rows keep
+`handle IS NULL` and resolve by slug until their owner picks something.
 
 ### Why digests everywhere
 
