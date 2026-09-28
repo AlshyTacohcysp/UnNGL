@@ -195,6 +195,22 @@ The callback URL is always:
 {NEXT_PUBLIC_ORIGIN}/api/auth/oauth/{provider}/callback
 ```
 
+| Provider | Variables | `{provider}` in the callback URL | Where the credentials come from |
+|---|---|---|---|
+| Google | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | `google` | Google Cloud Console → Credentials |
+| GitHub | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | `github` | GitHub → Settings → Developer settings |
+| Discord | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | `discord` | Discord Developer Portal |
+| Facebook / Instagram | `INSTAGRAM_CLIENT_ID`, `INSTAGRAM_CLIENT_SECRET` | **`facebook`** | Meta developer console |
+
+Two things about that last row catch people out. The variable names say
+`INSTAGRAM` but the credentials are created in the **Meta** console, not
+Google's, so there is no way to find them by looking for a Google setting.
+And although the button reads "Connect Instagram", the provider's id is
+`facebook` and it talks to the Facebook Graph API — so the callback is
+`/api/auth/oauth/facebook/callback`. Registering
+`/api/auth/oauth/instagram/callback` is a 404, and the sign-in fails with no
+explanation at the provider's end.
+
 With `NEXT_PUBLIC_ORIGIN=https://unngl.example.com`, Google is
 `https://unngl.example.com/api/auth/oauth/google/callback`. See
 [getting started](getting-started.md#sign-in) for what each provider does.

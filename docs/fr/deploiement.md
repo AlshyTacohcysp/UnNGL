@@ -204,6 +204,22 @@ seul. L'URL de rappel est toujours :
 {NEXT_PUBLIC_ORIGIN}/api/auth/oauth/{provider}/callback
 ```
 
+| Fournisseur | Variables | `{provider}` dans l'URL de rappel | D'où viennent les identifiants |
+|---|---|---|---|
+| Google | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | `google` | Console Google Cloud → Identifiants |
+| GitHub | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | `github` | GitHub → Paramètres → Developer settings |
+| Discord | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | `discord` | Portail développeur Discord |
+| Facebook / Instagram | `INSTAGRAM_CLIENT_ID`, `INSTAGRAM_CLIENT_SECRET` | **`facebook`** | Console développeur Meta |
+
+Deux détails sur la dernière ligne piègent les gens. Les variables portent le
+nom `INSTAGRAM` mais les identifiants se créent dans la console **Meta**,
+pas chez Google : impossible de les trouver en cherchant un réglage Google.
+Et malgré le libellé « Connecter mon Instagram », l'identifiant du
+fournisseur est `facebook` et il parle à l'API Graph de Facebook — le rappel
+est donc `/api/auth/oauth/facebook/callback`. Enregistrer
+`/api/auth/oauth/instagram/callback` donne un 404, et la connexion échoue sans
+explication côté fournisseur.
+
 Avec `NEXT_PUBLIC_ORIGIN=https://unngl.exemple.com`, Google vaut
 `https://unngl.exemple.com/api/auth/oauth/google/callback`. Voir
 [démarrage](demarrage.md#se-connecter) pour ce que fait chaque fournisseur.

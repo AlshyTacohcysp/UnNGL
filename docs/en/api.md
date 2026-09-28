@@ -100,17 +100,39 @@ attributes it was set with.
 
 ## Inboxes
 
-An **inbox** is the public composer. Its slug is the shareable link.
+An **inbox** is the public composer. It has two public names:
+
+- a **slug** — 12 characters from a 31-symbol alphabet, 71 bits of entropy.
+  This is the credential. It is generated, never chosen, and it is valid for
+  as long as the inbox exists.
+- a **handle** — a name a person picked, like `amina.k`. Optional, and only
+  the owner can set it.
+
+Both resolve in the URL. `/{handle}` and `/{slug}` reach the same inbox, and
+so do `/i/{handle}` and `/i/{slug}`. A link shared before its owner named the
+inbox keeps working, and a link shared after a rename keeps working through
+`handle_aliases`.
 
 ### `POST /api/inboxes` — create
 
-Requires a session. Body: `{ "title"?: "string ≤ 60" }`.
+Requires a session. Body: `{ "title"?: "string ≤ 60", "handle"?: "string" }`.
 
 ```jsonc
-{ "ok": true, "inbox": { "id": "...", "slug": "a7k3m9xp2qvn", "title": "...", ... } }
+{
+  "ok": true,
+  "inbox": { "id": "...", "slug": "a7k3m9xp2qvn", "handle": "amina.k", "title": "..." },
+  "handleRejected": false
+}
 ```
 
-The slug is 12 characters from a 31-symbol alphabet — 71 bits of entropy.
+A `handle` passed here is a convenience, never a condition: if the name is
+taken or malformed the inbox is still created and still works by slug, and
+the response carries `handleRejected: true`. Losing a name race must never
+cost someone their link.
+
+`id` is returned so a client can claim a handle for this inbox on the next
+call. It is not a credential — every handle endpoint re-checks that the
+caller owns the inbox it names.
 
 **429** at `INBOXES_PER_USER` (default 5), or when rate-limited.
 
@@ -118,6 +140,70 @@ The slug is 12 characters from a 31-symbol alphabet — 71 bits of entropy.
 
 Owner only; anyone else gets **403** `That is not your inbox.`
 Body: `{ "title"?: "string ≤ 60", "notify"?: boolean }`.
+
+---
+
+## Handles
+
+Handles are the only user-chosen strings the app puts in a URL, so every
+endpoint here re-validates on the server. Nothing the browser says is
+authoritative.
+
+### What a handle may be
+
+| Rule | Value |
+|---|---|
+| Length | 3–24 characters, measured after folding case |
+| Alphabet | `a–z`, `0–9`, `.`, `-`, `_` — **ASCII only** |
+| Ends | a letter or digit; no leading or trailing `.`, `-`, `_` |
+| Double dots | refused (`amina..k`) |
+| Case | folded to lower case, so `Amina.K` and `amina.k` are one name |
+| Reserved | every route segment the app owns, plus names that read as the service's own |
+
+ASCII-only is the point. A Cyrillic `а` is the same shape to a reader and a
+different string to a database, and a handle is not allowed to be one of
+those. A handle is also never a trust signal: it is always shown next to its
+own inbox, and the recipient can check the colours in the message.
+
+### `GET /api/handles/check?handle=amina.k` — availability
+
+Signed in only, because the only person who needs the answer is the one about
+to claim the name; an open oracle would let anyone map which names exist
+without creating anything.
+
+```jsonc
+{ "ok": true, "available": true, "handle": "amina.k" }
+{ "ok": true, "available": false, "reason": "reserved", "message": "That one is taken by UnNGL itself." }
+{ "ok": true, "available": false, "reason": "taken",    "message": "Someone already has that name." }
+```
+
+`reason` is one of `empty`, `too-short`, `too-long`, `characters`,
+`reserved`, `taken`, or `rate`/`unauthenticated` when the call itself is
+refused. Rate-limited per user and per IP.
+
+### `POST /api/handles` — claim or rename
+
+Signed in. Body: `{ "inboxId": "...", "handle": "amina.k" }`.
+
+```jsonc
+{ "ok": true, "inbox": { "handle": "amina.k", "slug": "a7k3m9xp2qvn", "url": "https://…/amina.k" },
+  "replaced": null }
+```
+
+| Status | When |
+|---|---|
+| **200** | claimed, renamed, or already yours |
+| **400** | not a usable name — the `message` says why |
+| **404** | no such inbox, or it is not yours |
+| **409** | the name is taken. Decided by the unique index, not by a check-then-insert |
+| **429** | rate-limited |
+
+Renaming writes the old name to `handle_aliases` in the same statement, so a
+link that was already handed out keeps resolving. Handing a name back to the
+same inbox clears the alias rather than burning it permanently.
+
+Re-claiming the name an inbox already has is a **200**, not a **409** — it is
+a no-op, not a collision.
 
 ---
 
@@ -296,6 +382,8 @@ by default in production.
 | `POST` | `/api/auth/logout` | session | end the session |
 | `POST` | `/api/inboxes` | session | create an inbox |
 | `PATCH` | `/api/inboxes/{slug}` | owner | rename / toggle notifications |
+| `GET` | `/api/handles/check` | session | is this name free? |
+| `POST` | `/api/handles` | session | claim or rename an inbox's handle |
 | `POST` | `/api/messages` | — | send anonymously |
 | `GET` | `/api/messages/{slug}` | — | read an inbox (side-effect free) |
 | `POST` | `/api/messages/{slug}` | — | mark as read |

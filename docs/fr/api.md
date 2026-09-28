@@ -106,18 +106,39 @@ Détruit la ligne de session et efface le cookie avec le même nom, le même
 
 ## Boîtes de réception
 
-Une **boîte** est le composeur public. Son slug est le lien partageable.
+Une **boîte** est le composeur public. Elle a deux noms publics :
+
+- un **slug** — 12 caractères tirés d'un alphabet de 31 symboles, 71 bits
+  d'entropie. C'est le secret d'accès. Il est généré, jamais choisi, et il
+  reste valable tant que la boîte existe.
+- un **handle** — un nom choisi par une personne, comme `amina.k`. Facultatif,
+  et seul le propriétaire peut le définir.
+
+Les deux fonctionnent dans l'URL. `/{handle}` et `/{slug}` mènent à la même
+boîte, et `/i/{handle}` comme `/i/{slug}`. Un lien partagé avant que le
+propriétaire n'ait nommé sa boîte continue de fonctionner, et un lien
+partagé après un renommage continue de fonctionner via `handle_aliases`.
 
 ### `POST /api/inboxes` — créer
 
-Session requise. Corps : `{ "title"?: "chaîne ≤ 60" }`.
+Session requise. Corps : `{ "title"?: "chaîne ≤ 60", "handle"?: "chaîne" }`.
 
 ```jsonc
-{ "ok": true, "inbox": { "id": "...", "slug": "a7k3m9xp2qvn", "title": "...", ... } }
+{
+  "ok": true,
+  "inbox": { "id": "...", "slug": "a7k3m9xp2qvn", "handle": "amina.k", "title": "..." },
+  "handleRejected": false
+}
 ```
 
-Le slug fait 12 caractères tirés d'un alphabet de 31 symboles — 71 bits
-d'entropie.
+Un `handle` passé ici est une commodité, jamais une condition : si le nom est
+pris ou invalide, la boîte est quand même créée et fonctionne toujours par
+son slug, et la réponse porte `handleRejected: true`. Perdre une course pour
+un nom ne doit jamais coûter son lien à quelqu'un.
+
+`id` est renvoyé pour qu'un client puisse revendiquer un handle pour cette
+boîte juste après. Ce n'est pas un secret d'accès — chaque endpoint de handle
+revérifie que l'appelant possède la boîte qu'il nomme.
 
 **429** à `INBOXES_PER_USER` (5 par défaut), ou en cas de limitation.
 
@@ -126,6 +147,71 @@ d'entropie.
 Réservé au propriétaire ; toute autre personne reçoit **403** `That is not your
 inbox.`
 Corps : `{ "title"?: "chaîne ≤ 60", "notify"?: boolean }`.
+
+---
+
+## Handles
+
+Les handles sont les seules chaînes choisies par l'utilisateur que
+l'application place dans une URL. Chaque endpoint ici revalide donc côté
+serveur : rien de ce que dit le navigateur n'est faisant foi.
+
+### Ce qu'un handle peut être
+
+| Règle | Valeur |
+|---|---|
+| Longueur | 3 à 24 caractères, mesurée après normalisation de la casse |
+| Alphabet | `a–z`, `0–9`, `.`, `-`, `_` — **ASCII uniquement** |
+| Extrémités | une lettre ou un chiffre ; ni `.`, ni `-`, ni `_` en tête ou en fin |
+| Points doubles | refusés (`amina..k`) |
+| Casse | repliée en minuscules : `Amina.K` et `amina.k` sont un seul nom |
+| Réservés | chaque segment de route de l'application, plus les noms qui font passer pour ceux du service |
+
+L'ASCII uniquement est le fond de l'histoire. Un `а` cyrillique a la même
+forme pour un lecteur et une chaîne différente pour une base de données, et
+un handle n'a pas le droit d'en être un. Un handle n'est pas non plus un
+signal de confiance : il est toujours affiché à côté de sa propre boîte, et
+le destinataire peut vérifier les couleurs du message.
+
+### `GET /api/handles/check?handle=amina.k` — disponibilité
+
+Connecté uniquement : la seule personne qui a besoin de la réponse est celle
+qui s'apprête à prendre le nom. Un oracle ouvert permettrait de cartographier
+quels noms existent sans rien créer.
+
+```jsonc
+{ "ok": true, "available": true, "handle": "amina.k" }
+{ "ok": true, "available": false, "reason": "reserved", "message": "That one is taken by UnNGL itself." }
+{ "ok": true, "available": false, "reason": "taken",    "message": "Someone already has that name." }
+```
+
+`reason` vaut `empty`, `too-short`, `too-long`, `characters`, `reserved`,
+`taken`, ou `rate`/`unauthenticated` quand l'appel lui-même est refusé.
+Limité par utilisateur et par IP.
+
+### `POST /api/handles` — prendre ou renommer
+
+Connecté. Corps : `{ "inboxId": "...", "handle": "amina.k" }`.
+
+```jsonc
+{ "ok": true, "inbox": { "handle": "amina.k", "slug": "a7k3m9xp2qvn", "url": "https://…/amina.k" },
+  "replaced": null }
+```
+
+| Statut | Quand |
+|---|---|
+| **200** | pris, renommé, ou déjà le vôtre |
+| **400** | nom inutilisable — le `message` dit pourquoi |
+| **404** | boîte inexistante, ou qui n'est pas la vôtre |
+| **409** | nom déjà pris. Tranché par l'index unique, pas par un vérifier-puis-écrire |
+| **429** | limitation de débit |
+
+Le renommage écrit l'ancien nom dans `handle_aliases` dans la même
+instruction : un lien déjà transmis continue donc de résoudre. Rendre un nom à
+la même boîte efface l'alias au lieu de le brûler définitivement.
+
+Reprendre le nom qu'une boîte possède déjà renvoie **200**, pas **409** : ce
+n'est pas un conflit, c'est une opération sans effet.
 
 ---
 
@@ -311,6 +397,8 @@ optionnel et désactivé par défaut en production.
 | `POST` | `/api/auth/logout` | session | clore la session |
 | `POST` | `/api/inboxes` | session | créer une boîte |
 | `PATCH` | `/api/inboxes/{slug}` | propriétaire | renommer / activer les notifications |
+| `GET` | `/api/handles/check` | session | ce nom est-il libre ? |
+| `POST` | `/api/handles` | session | prendre ou renommer le handle d'une boîte |
 | `POST` | `/api/messages` | — | envoyer anonymement |
 | `GET` | `/api/messages/{slug}` | — | lire une boîte (sans effet de bord) |
 | `POST` | `/api/messages/{slug}` | — | marquer comme lu |
