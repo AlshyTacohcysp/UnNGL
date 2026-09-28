@@ -13,13 +13,14 @@ export interface RateResult {
   retryAfterSeconds: number;
 }
 
-type Bucket = 'send' | 'login' | 'media' | 'create';
+type Bucket = 'send' | 'login' | 'media' | 'create' | 'handle';
 
 const WINDOWS: Record<Bucket, number> = {
   send: 3600,
   login: 900,
   media: 3600,
   create: 3600,
+  handle: 3600,
 };
 
 /**

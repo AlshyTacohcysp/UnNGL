@@ -125,11 +125,22 @@ function query<T = Row>(sql: Sql, q: string, params: unknown[]) {
   return sql.unsafe(toPositional(q), normalize(params) as never[]) as Promise<T[]>;
 }
 
-/** The three read/write helpers, bound to one connection. */
+/** The read/write helpers, bound to one connection. */
 export interface Executor {
   all<T = Row>(q: string, ...params: unknown[]): Promise<T[]>;
   get<T = Row>(q: string, ...params: unknown[]): Promise<T | undefined>;
   run(q: string, ...params: unknown[]): Promise<{ changes: number }>;
+  /*
+   * There is deliberately no "run this, and tell me if it collided" helper.
+   *
+   * It is the obvious thing to want — a unique violation is an answer, not
+   * an exception — and a SAVEPOINT is the textbook way to get it. It does
+   * not work with postgres.js: the savepoint does restore the transaction,
+   * but the driver re-raises the original error when the transaction
+   * commits, so the failure still escapes the callback. Anything that can
+   * fail on a constraint is written as a single statement instead, which
+   * Postgres already makes atomic, and the 23505 is caught around that.
+   */
 }
 
 /**
@@ -137,6 +148,7 @@ export interface Executor {
  * function to run that function's statements inside somebody else's
  * transaction; pass nothing to use the pool.
  */
+
 export function executor(sql: Sql): Executor {
   return {
     all: <T = Row>(q: string, ...params: unknown[]) => query<T>(sql, q, params),
@@ -300,6 +312,34 @@ const MIGRATIONS: Migration[] = [
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+    `,
+  },
+  {
+    // User-chosen handles. Migration 2 only ADDS the column; it does not
+    // invent names for the inboxes that already exist. A random 12-character
+    // slug cannot be turned into something a person would have chosen, so
+    // existing rows keep a NULL handle and continue to resolve by slug
+    // until their owner picks a name. Backfilling would put "xk39d2" in
+    // public URLs and call it a chosen handle, which it is not.
+    id: 2,
+    sql: `
+      ALTER TABLE inboxes ADD COLUMN IF NOT EXISTS handle TEXT;
+
+      -- Case-insensitive uniqueness. Handles are compared folded to lower
+      -- case in the application too, so "Amina.K" and "amina.k" cannot both
+      -- exist even though Postgres would otherwise treat them as distinct.
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_inboxes_handle
+        ON inboxes (lower(handle)) WHERE handle IS NOT NULL;
+
+      -- Retired handles, kept so a link that was already shared keeps
+      -- working after its owner renames. Resolution is one indexed lookup
+      -- and the table only ever grows by explicit renames.
+      CREATE TABLE IF NOT EXISTS handle_aliases (
+        handle       TEXT PRIMARY KEY,
+        inbox_id     TEXT NOT NULL REFERENCES inboxes(id) ON DELETE CASCADE,
+        created_at   DOUBLE PRECISION NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_handle_aliases_inbox ON handle_aliases(inbox_id);
     `,
   },
 ];

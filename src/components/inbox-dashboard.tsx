@@ -12,6 +12,7 @@ import { formatWhen } from './messages-panel';
 
 export interface InboxSummary {
   slug: string;
+  handle: string | null;
   title: string;
   createdAt: number;
   lastMessageAt: number | null;
@@ -38,7 +39,11 @@ export function InboxDashboard({ inboxes }: { inboxes: InboxSummary[] }) {
         body: JSON.stringify({ title: title.trim() || 'My messages' }),
       });
       const json = (await res.json().catch(() => null)) as
-        | { ok: boolean; error?: string; inbox?: { slug: string; title: string; url: string } }
+        | {
+            ok: boolean;
+            error?: string;
+            inbox?: { slug: string; handle: string | null; title: string; url: string };
+          }
         | null;
       if (!res.ok || !json?.ok || !json.inbox) {
         setError(json?.error ?? 'Could not create an inbox.');
@@ -47,6 +52,7 @@ export function InboxDashboard({ inboxes }: { inboxes: InboxSummary[] }) {
       setItems((list) => [
         {
           slug: json.inbox!.slug,
+          handle: json.inbox!.handle ?? null,
           title: json.inbox!.title,
           createdAt: Date.now(),
           lastMessageAt: null,
@@ -97,8 +103,12 @@ export function InboxDashboard({ inboxes }: { inboxes: InboxSummary[] }) {
     setItems((list) => list.filter((i) => i.slug !== slug));
   }
 
-  const linkFor = (slug: string) =>
-    typeof window !== 'undefined' ? `${window.location.origin}/${slug}` : `/${slug}`;
+  // A named inbox is shared as its name; an unnamed one keeps its code.
+  // Both resolve, so a link copied here works either way.
+  const linkFor = (slug: string, handle: string | null) =>
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/${handle ?? slug}`
+      : `/${handle ?? slug}`;
 
   return (
     <div className="flex flex-col gap-8">
@@ -146,7 +156,14 @@ export function InboxDashboard({ inboxes }: { inboxes: InboxSummary[] }) {
                   )}
                 </div>
 
-                <p className="font-mono text-[0.68rem] mt-1 text-ink-soft">
+                <p className="mt-1 text-sm text-ink-soft">
+                  {inbox.handle ? (
+                    <span className="font-semibold text-ink">unngl.link/{inbox.handle}</span>
+                  ) : (
+                    <span className="font-mono text-[0.68rem]">unngl.link/{inbox.slug}</span>
+                  )}
+                </p>
+                <p className="mt-0.5 text-xs text-ink-faint">
                   {inbox.total} message{inbox.total === 1 ? '' : 's'}
                   {inbox.lastMessageAt ? ` · last ${formatWhen(inbox.lastMessageAt)}` : ''}
                 </p>
@@ -158,14 +175,14 @@ export function InboxDashboard({ inboxes }: { inboxes: InboxSummary[] }) {
                 )}
 
                 <div className="mt-auto flex flex-wrap gap-2 pt-4">
-                  <Link href={`/i/${inbox.slug}`} className="btn btn-sm btn-outline">
+                  <Link href={`/i/${inbox.handle ?? inbox.slug}`} className="btn btn-sm btn-outline">
                     Open
                   </Link>
                   <button
                     type="button"
                     className="btn btn-sm"
                     onClick={() => {
-                      void navigator.clipboard?.writeText(linkFor(inbox.slug));
+                      void navigator.clipboard?.writeText(linkFor(inbox.slug, inbox.handle));
                       setCopied(inbox.slug);
                       setTimeout(() => setCopied(null), 1800);
                     }}

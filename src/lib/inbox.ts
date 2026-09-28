@@ -5,12 +5,17 @@
  * receiver needs, so slugs are 71 bits of entropy and inbox owners are
  * encouraged to rotate them.
  *
+ * A slug is a secret. A handle is a name. Both address the same inbox and
+ * both stay valid, which is what lets a link shared today keep resolving
+ * after its owner renames theirs.
+ *
  * @license AGPL-3.0-or-later
  */
 
 import { customAlphabet } from 'nanoid';
 import { all, db, get, run, tx, type Executor } from './db';
 import { digestToken, randomToken } from './crypto';
+import { normalizeHandle, validateHandle, type HandleCheck } from './handle';
 import { createHintFromImage, getHintForMessage, toHintView, type HintView } from './hints';
 import { deleteImage } from './images';
 
@@ -23,6 +28,8 @@ export interface Inbox {
   id: string;
   owner_id: string;
   slug: string;
+  /** User-chosen name, or NULL for inboxes nobody has named yet. */
+  handle: string | null;
   title: string;
   notify: number;
   created_at: number;
@@ -72,6 +79,155 @@ export async function getInboxBySlug(slugValue: string): Promise<Inbox | undefin
   return await get<Inbox>('SELECT * FROM inboxes WHERE slug = ? AND deleted_at IS NULL', slugValue);
 }
 
+/* ------------------------------------------------------------------ *
+ * Handles
+ * ------------------------------------------------------------------ */
+
+/**
+ * Resolve whatever appeared in the URL to an inbox.
+ *
+ * Three lookups, cheapest first, all on an index:
+ *
+ *   1. a live handle          — what a person chose
+ *   2. a retired handle       — so a shared link survives a rename
+ *   3. a slug                 — every link ever shared, and the fallback for
+ *                               the inboxes that have never been named
+ *
+ * Order matters: a handle is checked before a slug so a rename can never be
+ * shadowed by an unrelated inbox that happens to hold the old slug value.
+ * The input is folded to lower case first, because handles are stored
+ * normalised and slugs are already lower case, so one fold serves both.
+ */
+export async function getInboxByHandleOrSlug(value: string): Promise<Inbox | undefined> {
+  const key = normalizeHandle(value);
+  if (!key) return undefined;
+
+  const byHandle = await get<Inbox>(
+    'SELECT * FROM inboxes WHERE lower(handle) = ? AND deleted_at IS NULL',
+    key,
+  );
+  if (byHandle) return byHandle;
+
+  const byAlias = await get<{ inbox_id: string }>(
+    'SELECT inbox_id FROM handle_aliases WHERE handle = ?',
+    key,
+  );
+  if (byAlias) return await getInboxById(byAlias.inbox_id);
+
+  return await getInboxBySlug(key);
+}
+
+/** Is this name free? Folds case, so `Amina.K` and `amina.k` are one name. */
+export async function handleIsTaken(handle: string): Promise<boolean> {
+  const key = normalizeHandle(handle);
+  const live = await get('SELECT 1 FROM inboxes WHERE lower(handle) = ?', key);
+  if (live) return true;
+  const alias = await get('SELECT 1 FROM handle_aliases WHERE handle = ?', key);
+  return Boolean(alias);
+}
+
+export type ClaimHandleResult =
+  | { ok: true; handle: string; replaced: string | null }
+  | { ok: false; check: HandleCheck };
+
+/**
+ * Give this inbox a name.
+ *
+ * The insert is the availability check: the unique index on `lower(handle)`
+ * is the only thing that can settle a race between two people picking the
+ * same name at the same instant, so this deliberately does not pre-check and
+ * then insert. A 23505 here means someone else won, which is the same answer
+ * a pre-check would have given a moment later.
+ *
+ * A renamed handle is written to `handle_aliases` in the same transaction as
+ * the update, so a link that was already handed out keeps resolving. An
+ * alias row for a handle that is later re-claimed by its original owner is
+ * cleared, so the name is never permanently burned.
+ */
+export async function claimHandle(
+  inboxId: string,
+  rawHandle: string,
+): Promise<ClaimHandleResult> {
+  const check = validateHandle(rawHandle);
+  if (!check.ok) return { ok: false, check };
+  const handle = check.handle!;
+
+  const inbox = await getInboxById(inboxId);
+  if (!inbox) {
+    return { ok: false, check: { ok: false, problem: 'empty', message: 'No such inbox.' } };
+  }
+
+  // Renaming to the name you already have is a no-op, not a conflict.
+  if (inbox.handle && inbox.handle.toLowerCase() === handle) {
+    return { ok: true, handle, replaced: null };
+  }
+
+  // One statement, not a transaction with three.
+  //
+  // The unique index on lower(handle) is the only thing that can settle two
+  // people picking the same name at the same instant, so the update has to be
+  // the thing that can fail — and a statement that fails is atomic in Postgres
+  // on its own, with nothing to roll back. The obvious alternative, catching
+  // 23505 out of a SAVEPOINT inside a transaction, does not work here: the
+  // savepoint correctly restores the transaction, but this driver re-raises
+  // the original error when the transaction commits, so the "someone already
+  // has that name" answer never escapes to the caller.
+  //
+  // A CTE also lets the alias be written in the same statement, which is what
+  // makes "rename" and "keep the old link working" a single fact rather than
+  // two that can disagree.
+  try {
+    const row = await get<{ handle: string | null; replaced: string | null }>(
+      `WITH previous AS (
+         SELECT handle FROM inboxes WHERE id = ? AND deleted_at IS NULL
+       ),
+       updated AS (
+         UPDATE inboxes SET handle = ? WHERE id = ? AND deleted_at IS NULL
+         RETURNING handle
+       ),
+       retired AS (
+         INSERT INTO handle_aliases (handle, inbox_id, created_at)
+         SELECT lower(previous.handle), ?, ?
+           FROM previous
+          WHERE previous.handle IS NOT NULL
+            AND lower(previous.handle) <> ?
+         ON CONFLICT (handle) DO UPDATE
+            SET inbox_id = EXCLUDED.inbox_id,
+                created_at = EXCLUDED.created_at
+         RETURNING handle AS old_handle
+       )
+       SELECT updated.handle AS handle,
+              (SELECT old_handle FROM retired) AS replaced
+         FROM updated`,
+      inboxId,
+      handle,
+      inboxId,
+      inboxId,
+      Date.now(),
+      handle,
+    );
+
+    // No row means the inbox was deleted between the read above and here.
+    if (!row) {
+      return { ok: false, check: { ok: false, problem: 'empty', message: 'No such inbox.' } };
+    }
+    return { ok: true, handle: row.handle!, replaced: row.replaced ?? null };
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      return {
+        ok: false,
+        check: { ok: false, problem: 'taken', message: 'Someone already has that name.' },
+      };
+    }
+    throw err;
+  }
+}
+
+/** Postgres unique-violation, whatever the driver called it. */
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { code?: string }).code === '23505';
+}
+
 export async function getInboxById(inboxId: string): Promise<Inbox | undefined> {
   return await get<Inbox>('SELECT * FROM inboxes WHERE id = ? AND deleted_at IS NULL', inboxId);
 }
@@ -104,7 +260,7 @@ export async function renameInbox(inboxId: string, title: string, notify: boolea
 }
 
 export async function rotateInboxSlug(inboxId: string): Promise<string> {
-  const s = uniqueSlug();
+  const s = await uniqueSlug();
   await run('UPDATE inboxes SET slug = ? WHERE id = ?', s, inboxId);
   return s;
 }

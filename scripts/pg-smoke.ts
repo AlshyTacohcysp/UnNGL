@@ -114,6 +114,83 @@ async function main() {
     check('posting a hinted message inside a transaction completes', !posted.message && Boolean((posted as any).colors),
       (posted as any).colors?.join(' ') ?? String((posted as any).message));
 
+    console.log('\nHandles');
+    // A handle is the only user-chosen string in a public URL, so the
+    // properties that matter are the ones a check-then-insert cannot give:
+    // that the unique index really is case-insensitive, that two owners
+    // racing for one name produce exactly one winner, and that a rename does
+    // not break a link that was already handed out.
+    {
+      const { createInbox, claimHandle, getInboxByHandleOrSlug, handleIsTaken, rotateInboxSlug } =
+        await import('../src/lib/inbox');
+      const t0 = Date.now();
+      for (const u of ['h1', 'h2', 'h3']) {
+        await db.run(
+          'INSERT INTO users (id, email, email_verified_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+          u, `${u}@unngl.test`, t0, t0, t0,
+        );
+      }
+      const a = await createInbox('h1', 'a');
+      const b = await createInbox('h2', 'b');
+
+      const first = await claimHandle(a.id, 'Amina.K');
+      check('a handle is claimed and folded to lower case',
+        first.ok && first.handle === 'amina.k', first.ok ? first.handle : first.check.message ?? '');
+
+      const stored = await db.get<{ handle: string | null }>(
+        'SELECT handle FROM inboxes WHERE id = ?', a.id);
+      check('the stored handle is normalised', stored?.handle === 'amina.k', String(stored?.handle));
+
+      check('the handle resolves', (await getInboxByHandleOrSlug('amina.k'))?.id === a.id);
+      check('the handle resolves whatever the case',
+        (await getInboxByHandleOrSlug('  AMINA.K '))?.id === a.id);
+      check('a taken name reads as taken', await handleIsTaken('amina.k'));
+      check('a free name reads as free', !(await handleIsTaken('amina.j')));
+
+      // The race. Both requests are in flight together; the unique index, not
+      // a pre-check, is what makes exactly one of them win.
+      const c = await createInbox('h3', 'c');
+      const race = await Promise.all([
+        claimHandle(b.id, 'contested'),
+        claimHandle(c.id, 'Contested'),
+      ]);
+      const won = race.filter((r) => r.ok).length;
+      check('two inboxes racing for one name produce exactly one winner', won === 1,
+        `${won} winners`);
+      check('the loser is told it is taken, not that it errored',
+        race.some((r) => !r.ok && r.check.problem === 'taken'));
+
+      // Renaming must not orphan a link that is already in the wild.
+      const before = (await getInboxByHandleOrSlug('amina.k'))?.id;
+      const renamed = await claimHandle(a.id, 'amina.j');
+      check('a rename reports what it replaced',
+        renamed.ok && renamed.replaced === 'amina.k',
+        renamed.ok ? String(renamed.replaced) : renamed.check.message ?? '');
+      check('the NEW name resolves', (await getInboxByHandleOrSlug('amina.j'))?.id === a.id);
+      check('the OLD name still resolves, via the alias table',
+        (await getInboxByHandleOrSlug('amina.k'))?.id === before);
+
+      // Taking the name back should not leave it burned forever.
+      const returned = await claimHandle(a.id, 'amina.k');
+      check('a handle can be reclaimed by the same inbox', returned.ok);
+      check('the reclaimed handle resolves', (await getInboxByHandleOrSlug('amina.k'))?.id === a.id);
+
+      // Reserved names never reach the database.
+      const reserved = await claimHandle(b.id, 'login');
+      check('a reserved name is refused at the door',
+        !reserved.ok && reserved.check.problem === 'reserved');
+
+      // A slug is still a credential and must keep working untouched.
+      check('an unnamed inbox still resolves by slug',
+        (await getInboxByHandleOrSlug(b.slug))?.id === b.id);
+      const rotated = await rotateInboxSlug(b.id);
+      check('rotating a slug returns a real string, not a promise',
+        typeof rotated === 'string' && rotated.length === 12, typeof rotated);
+      check('the rotated slug resolves', (await getInboxByHandleOrSlug(rotated))?.id === b.id);
+      check('the old slug no longer resolves',
+        (await getInboxByHandleOrSlug(b.slug)) === undefined);
+    }
+
     console.log('\nThe SQLite dialect really is gone');
     for (const [label, sql] of [
       ['strftime', `SELECT strftime('%s', 'now')`],

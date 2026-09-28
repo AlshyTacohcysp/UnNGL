@@ -5,7 +5,7 @@
  */
 
 import { config } from '@/lib/config';
-import { createInbox, inboxCountForUser } from '@/lib/inbox';
+import { claimHandle, createInbox, inboxCountForUser } from '@/lib/inbox';
 import { currentUserId } from '@/lib/auth';
 import { clientIp, fail, ok, route } from '@/lib/http';
 import { hit } from '@/lib/ratelimit';
@@ -29,5 +29,33 @@ export const POST = route('inboxes.create', async (req: Request) => {
   const title = parsed.success && parsed.data.title ? parsed.data.title : 'My messages';
 
   const inbox = await createInbox(userId, title);
-  return ok({ inbox: { slug: inbox.slug, title: inbox.title, url: `${config.origin}/${inbox.slug}` } }, 201);
+
+  // A name offered at creation is a convenience, not a condition: if it is
+  // taken or malformed the inbox still exists and still works by slug, so a
+  // name someone else already has never costs them their link.
+  let handle: string | null = null;
+  const wanted = typeof (body as { handle?: unknown }).handle === 'string'
+    ? String((body as { handle: string }).handle)
+    : '';
+  if (wanted.trim()) {
+    const claimed = await claimHandle(inbox.id, wanted);
+    handle = claimed.ok ? claimed.handle : null;
+  }
+
+  return ok(
+    {
+      inbox: {
+        // The id is returned to the signed-in creator so a client can claim a
+        // handle for this inbox. It is not a credential: every handle
+        // endpoint re-checks that the caller owns the inbox it names.
+        id: inbox.id,
+        slug: inbox.slug,
+        handle,
+        title: inbox.title,
+        url: `${config.origin}/${handle ?? inbox.slug}`,
+      },
+      handleRejected: wanted.trim() && handle === null ? true : undefined,
+    },
+    201,
+  );
 });

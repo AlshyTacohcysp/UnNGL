@@ -159,6 +159,65 @@ async function main() {
   const slug: string = made.body?.inbox?.slug;
   check('it has a slug', Boolean(slug), String(slug));
 
+  console.log('\nChosen handles');
+  // The handle is the public name of a link, so what matters end to end is
+  // that a name resolves, that a taken name is refused rather than silently
+  // reassigned, and that the old code keeps working throughout.
+  const wanted = `e2e-${Date.now().toString(36)}`;
+  {
+    const free = await call(`/api/handles/check?handle=${encodeURIComponent(wanted)}`, { method: 'GET' });
+    check('a fresh name reads as free', free.body?.available === true, JSON.stringify(free.body).slice(0, 80));
+  }
+  {
+    const taken = await call('/api/handles/check?handle=login', { method: 'GET' });
+    check('a reserved name is never available', taken.body?.available === false, JSON.stringify(taken.body).slice(0, 80));
+  }
+  {
+    const traversal = await call('/api/handles/check?handle=a%2F..%2Fb', { method: 'GET' });
+    check('a path traversal attempt is refused', traversal.body?.available === false, JSON.stringify(traversal.body).slice(0, 80));
+  }
+  const claim = await call('/api/handles', { method: 'POST', json: { inboxId: made.body?.inbox?.id, handle: wanted } });
+  check('a name is claimed', claim.status === 200 && claim.body?.inbox?.handle === wanted,
+    JSON.stringify(claim.body).slice(0, 90));
+
+  {
+    const page = await call(`/${wanted}`, { method: 'GET' });
+    check('the named send page renders', page.status === 200, String(page.status));
+  }
+  {
+    const again = await call('/api/handles', { method: 'POST', json: { inboxId: made.body?.inbox?.id, handle: wanted.toUpperCase() } });
+    check('re-claiming your own name is a no-op, not a conflict',
+      again.status === 200 && again.body?.ok === true, JSON.stringify(again.body).slice(0, 90));
+  }
+  {
+    const second = await call('/api/inboxes', { method: 'POST', json: { title: 'Second' } });
+    const clash = await call('/api/handles', {
+      method: 'POST',
+      json: { inboxId: second.body?.inbox?.id, handle: wanted },
+    });
+    check('a name already in use is refused with 409', clash.status === 409, String(clash.status));
+    check('the loser is told it is taken, not that it broke', clash.body?.error?.match(/already/i) !== null,
+      JSON.stringify(clash.body).slice(0, 90));
+    // The refusal must not have taken the other inbox down with it.
+    const survivor = await call(`/${slug}`, { method: 'GET' });
+    check('the refused inbox still works by its code', survivor.status === 200, String(survivor.status));
+  }
+  {
+    const renamed = await call('/api/handles', {
+      method: 'POST',
+      json: { inboxId: made.body?.inbox?.id, handle: `${wanted}-renamed` },
+    });
+    check('a rename is accepted', renamed.status === 200, JSON.stringify(renamed.body).slice(0, 90));
+    const oldLink = await call(`/${wanted}`, { method: 'GET' });
+    check('the OLD name still works after a rename', oldLink.status === 200, String(oldLink.status));
+    const newLink = await call(`/${wanted}-renamed`, { method: 'GET' });
+    check('the new name works too', newLink.status === 200, String(newLink.status));
+  }
+  {
+    const signedOut = await fetch(`${BASE}/api/handles?handle=whatever`, { method: 'POST' });
+    check('an anonymous visitor cannot claim a name', signedOut.status === 401, String(signedOut.status));
+  }
+
   console.log('\nMessages and hints');
   const png = makePng(8, 8, (x, y) => [(x * 32) % 256, (y * 32) % 256, 128]);
   const sent = await sendForm(slug, 'hello from postgres', png);

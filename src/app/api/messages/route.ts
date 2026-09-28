@@ -16,7 +16,7 @@
 
 import { NextResponse } from 'next/server';
 import { config } from '@/lib/config';
-import { getInboxBySlug } from '@/lib/inbox';
+import { getInboxByHandleOrSlug } from '@/lib/inbox';
 import { postMessage } from '@/lib/inbox';
 import { clientIp, fail, ok, route, userAgent } from '@/lib/http';
 import { hit, pruneRateLimits } from '@/lib/ratelimit';
@@ -42,7 +42,7 @@ export const POST = route('messages.send', async (req: Request) => {
   const url = new URL(req.url);
   const slug = url.searchParams.get('to') ?? '';
 
-  const inbox = await getInboxBySlug(slug);
+  const inbox = await getInboxByHandleOrSlug(slug);
   // Answer identically for unknown inboxes so links can't be probed.
   if (!inbox) return fail('That link has expired or never existed.', 404);
 

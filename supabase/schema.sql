@@ -58,6 +58,10 @@ CREATE TABLE IF NOT EXISTS users (
         id              TEXT PRIMARY KEY,
         owner_id        TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         slug            TEXT NOT NULL UNIQUE,
+        -- User-chosen name, NULL until an owner picks one. Unique when
+        -- present, compared case-insensitively, and only ever set by the
+        -- owner: the slug is the credential, the handle is the label.
+        handle          TEXT,
         title           TEXT NOT NULL,
         notify          INTEGER NOT NULL DEFAULT 0,
         created_at      DOUBLE PRECISION NOT NULL,
@@ -65,6 +69,16 @@ CREATE TABLE IF NOT EXISTS users (
         deleted_at      DOUBLE PRECISION
       );
       CREATE INDEX IF NOT EXISTS idx_inboxes_owner ON inboxes(owner_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_inboxes_handle
+        ON inboxes (lower(handle)) WHERE handle IS NOT NULL;
+
+      -- Retired handles, so a link shared before a rename keeps resolving.
+      CREATE TABLE IF NOT EXISTS handle_aliases (
+        handle       TEXT PRIMARY KEY,
+        inbox_id     TEXT NOT NULL REFERENCES inboxes(id) ON DELETE CASCADE,
+        created_at   DOUBLE PRECISION NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_handle_aliases_inbox ON handle_aliases(inbox_id);
 
       CREATE TABLE IF NOT EXISTS messages (
         id           TEXT PRIMARY KEY,

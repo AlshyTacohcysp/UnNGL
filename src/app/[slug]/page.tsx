@@ -6,7 +6,7 @@ import { CollageHeader } from '@/components/blob-collage';
 import { PaletteBlobs } from '@/components/palette-strip';
 import { currentUserId } from '@/lib/auth';
 import { config } from '@/lib/config';
-import { getInboxBySlug } from '@/lib/inbox';
+import { getInboxByHandleOrSlug } from '@/lib/inbox';
 import { SAMPLE_LIST } from '@/lib/samples.generated';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +16,7 @@ type Params = { params: Promise<{ slug: string }> };
 /** Inbox links are private by nature: never index them, never cache them. */
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
-  const inbox = await getInboxBySlug(slug);
+  const inbox = await getInboxByHandleOrSlug(slug);
   return {
     title: inbox ? `A message for ${inbox.title}` : 'Message',
     description: 'Send an anonymous message, with your colours as the hint.',
@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 export default async function ComposePage({ params }: Params) {
   const { slug } = await params;
-  const inbox = await getInboxBySlug(slug);
+  const inbox = await getInboxByHandleOrSlug(slug);
   if (!inbox) notFound();
 
   // If this is the owner on their own link, show them their messages instead

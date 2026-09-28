@@ -18,6 +18,7 @@ export default async function InboxListPage() {
 
   const inboxes = (await listInboxesForUser(user.id)).map((i) => ({
     slug: i.slug,
+    handle: i.handle,
     title: i.title,
     createdAt: i.created_at,
     lastMessageAt: i.last_message_at,

@@ -5,7 +5,7 @@ import { MessagesPanel } from '@/components/messages-panel';
 import { CollageHeader } from '@/components/blob-collage';
 import { InboxSettings } from '@/components/inbox-settings';
 import { currentUserId } from '@/lib/auth';
-import { getInboxBySlug, listMessages, markAllSeen } from '@/lib/inbox';
+import { getInboxByHandleOrSlug, listMessages, markAllSeen } from '@/lib/inbox';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 
 export default async function InboxPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const inbox = await getInboxBySlug(slug);
+  const inbox = await getInboxByHandleOrSlug(slug);
   if (!inbox) notFound();
 
   const userId = await currentUserId();
@@ -53,6 +53,8 @@ export default async function InboxPage({ params }: { params: Promise<{ slug: st
       <div className="mt-12">
         <InboxSettings
           slug={inbox.slug}
+          inboxId={inbox.id}
+          handle={inbox.handle}
           title={inbox.title}
           notify={inbox.notify === 1}
         />
