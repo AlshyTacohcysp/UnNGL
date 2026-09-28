@@ -246,7 +246,7 @@ six couleurs : l'identité et le produit sont le même objet.
 ## Tests
 
 ```bash
-npm test        # 56 tests
+npm test        # 59 tests
 npm run typecheck
 ```
 
@@ -254,7 +254,7 @@ npm run typecheck
   référence (`26d88308`) qui fige la sortie pour une entrée donnée, plus les cas
   limites : niveaux de gris, entièrement transparent, monochrome, 1×1,
   non-carré.
-- `tests/security.test.ts` — 38 tests couvrant le durcissement : enforcement
+- `tests/security.test.ts` — 41 tests couvrant le durcissement : enforcement
   same-origin, empreintes de jetons, nommage du cookie de session, robustesse du
   secret, bornes anti-bombes PNG, liste blanche SSRF, plafonds d'octets en
   réponse, et règles de divulgation du endpoint de santé.

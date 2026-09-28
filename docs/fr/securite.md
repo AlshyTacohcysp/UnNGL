@@ -18,7 +18,7 @@ déployer.
 |---|---|
 | `npm audit` (production) | **0 vulnérabilité** |
 | `npm audit` (y compris le développement) | **0 vulnérabilité** |
-| Suite de tests | **56 réussis** (18 algorithme, 38 régression sécurité) |
+| Suite de tests | **59 réussis** (18 algorithme, 41 régression sécurité) |
 | TypeScript | propre, `strict` |
 | En-têtes de sécurité | CSP, HSTS (optionnel), `X-Frame-Options`, COOP, CORP, `nosniff`, `Referrer-Policy`, `Permissions-Policy` |
 | Dépendances de runtime | 3 (`next`, `react`, `react-dom`, plus `zod`) |
@@ -385,7 +385,7 @@ lecture. Voir [architecture](architecture.md#les-dépendances).
 
 ## Tests
 
-`tests/security.test.ts` contient 38 tests de régression. Chacun correspond soit
+`tests/security.test.ts` contient 41 tests de régression. Chacun correspond soit
 à un vrai défaut ayant existé, soit à une attaque que la conception doit refuser.
 Ils sont écrits pour échouer bruyamment si la protection est un jour retirée :
 
@@ -404,6 +404,7 @@ Ils sont écrits pour échouer bruyamment si la protection est un jour retirée 
   retombent sur la valeur par défaut.
 - **Génération de jetons** (2) — 256 bits en base64 sûr pour URL ; premier chiffre
   uniforme sur 20 000 codes.
+- **Invariants de déploiement** (3) — la base ne peut jamais être créée dans `.next` (un rebuild supprimerait silencieusement tous les messages) ; le repli `next start` ne peut jamais être un `npx` nu qui télécharge une autre version majeure ; et un `SESSION_SECRET` manquant est refusé au démarrage, avec la commande pour le corriger.
 - **Typage des rejets** (2) — chaque échec du décodeur est une `ImageError`, donc les routes répondent 400 avec une raison au lieu d'un 500 générique ; plus un contrôle positif pour que le typage ne puisse pas passer en refusant tout.
 - **Entrées hostiles** (4) — octets qui ressemblent seulement à un PNG, tampons
   vides, signatures tronquées, images entrelacées, types de couleur et filtres

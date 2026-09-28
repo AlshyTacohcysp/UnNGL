@@ -7,7 +7,8 @@ container and copy a file, you can run UnNGL.
 ## Before anything: two non-negotiables
 
 1. **`SESSION_SECRET` must be set, and must be random.** The server refuses to
-   boot in production without it.
+   boot in production without it — it exits immediately with instructions, before
+   serving a single request.
    ```bash
    openssl rand -base64 48
    ```
@@ -49,11 +50,18 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
-The SQLite file lives in `./data` on the host, so `docker compose down` and
-`docker compose up` never touch your messages. The image runs as a non-root
-user on port 3000, has a healthcheck, and ships Next.js *standalone* output, so
-the final image carries no build tooling and no `node_modules` you did not ask
-for.
+The SQLite file lives in a Docker **named volume**, so `docker compose down`
+never touches your messages, and the database is not readable from anywhere else
+on the host. The image runs as a non-root user on port 3000, has a healthcheck,
+and ships Next.js *standalone* output, so the final image carries no build
+tooling and no `node_modules` you did not ask for.
+
+> **Want to see your data?** Switch to a bind mount — but run
+> `mkdir -p data && sudo chown 1001:1001 data` first. The image runs as uid 1001
+> and a directory Docker creates for a bind mount belongs to root, so SQLite
+> cannot create its `-wal`/`-shm` files and the container exits on first start.
+> It is the single most common first-run failure. The exact lines to change are
+> commented at the bottom of `docker-compose.yml`.
 
 Put a reverse proxy in front (Caddy, nginx, Traefik) for TLS. A minimal Caddyfile:
 
@@ -165,6 +173,13 @@ Everything that matters is one file.
 
 ```bash
 sqlite3 /srv/unngl/data/unngl.sqlite ".backup '/backups/unngl-$(date +%F).sqlite'"
+```
+
+With the Docker named volume:
+
+```bash
+docker run --rm -v unngl_data:/data -v "$PWD":/backup alpine \
+  sh -c 'cd /data && sqlite3 unngl.sqlite ".backup /backup/unngl-$(date +%F).sqlite"'
 ```
 
 Use `.backup`, not `cp`. The database runs in WAL mode, so a plain `cp` of a live

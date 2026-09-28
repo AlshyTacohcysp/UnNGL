@@ -87,6 +87,33 @@
     outline-offset: 2px;
   }
 
+  /*
+   * Keyboard skip link. Parked off-screen and revealed on focus, so it costs
+   * nothing visually but gives anyone tabbing through the nav a way past it.
+   * `left: -9999px` rather than `clip` so it genuinely leaves the viewport and
+   * cannot be reached by a pointer that happens to sweep the top-left corner.
+   */
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 100;
+    padding: 0.75rem 1.25rem;
+    background: var(--color-ink);
+    color: var(--color-paper);
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .skip-link:focus {
+    left: 0;
+  }
+
+  /* The skip target should not draw a ring around the whole page. */
+  #main:focus {
+    outline: none;
+  }
+
   /* Square, chunky, no rounded corners anywhere. */
   input,
   textarea,

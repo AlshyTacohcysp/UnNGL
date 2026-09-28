@@ -3,7 +3,7 @@
 **Version 1.0.0.** This page is the specification. The reference implementation is
 [`src/lib/palette/extract.ts`](../../src/lib/palette/extract.ts) — the same file
 the browser and the server both import. There is a live playground at
-[`/algorithm`](/algorithm) that runs it in your browser, and a test suite with a
+[`/algorithm`](https://unngl.link/algorithm) that runs it in your browser, and a test suite with a
 golden hash so that any change to the output fails CI.
 
 The point of publishing all of this is simple: **a hint you cannot verify is a

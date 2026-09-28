@@ -95,7 +95,7 @@ code, the inbox link and the public composer link. Re-running it is safe.
 | `npm run dev` | development server with hot reload, on port 3000 |
 | `npm run build` | production build |
 | `npm start` | production server (standalone output if built, else `next start`) |
-| `npm test` | the full test suite (56 tests) |
+| `npm test` | the full test suite (59 tests) |
 | `npm run typecheck` | TypeScript, no emit |
 | `npm run seed` | create the demo account and inbox |
 | `npm run samples` | regenerate the example palettes in the marketing pages |
@@ -103,7 +103,7 @@ code, the inbox link and the public composer link. Re-running it is safe.
 
 ## Configuration
 
-Every variable is documented in [`.env.example`](../.env.example). For a local
+Every variable is documented in [`.env.example`](../../.env.example). For a local
 run you need none of them.
 
 The one thing that matters in production is `SESSION_SECRET`:

@@ -15,7 +15,7 @@ get a response, and you will be credited.
 | | |
 |---|---|
 | `npm audit` | **0 vulnerabilities** (production and full tree) |
-| Tests | **56 passing** — 18 algorithm, 38 security regression |
+| Tests | **59 passing** — 18 algorithm, 41 security regression |
 | TypeScript | clean, `strict` |
 | Runtime dependencies | `next`, `react`, `react-dom`, `zod` |
 

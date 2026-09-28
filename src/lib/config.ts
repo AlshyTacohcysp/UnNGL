@@ -92,6 +92,15 @@ export const config = {
     return !this.isProd && process.env.EXPOSE_DEV_CODES === '1' && this.mail.transport === 'console';
   },
   /**
+   * Escape hatch for a throwaway instance: use the development default for
+   * SESSION_SECRET in production. Every HMAC in the app is then derived from a
+   * value that is published in the source, so it is only ever acceptable on a
+   * machine you control, reachable by nobody else.
+   */
+  get allowInsecureDefaults() {
+    return ALLOW_INSECURE_DEFAULTS;
+  },
+  /**
    * Whether to believe X-Forwarded-For and friends. Off by default: if the app
    * is reachable directly, a client can put whatever it likes in those headers
    * and walk straight through every per-IP rate limit.

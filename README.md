@@ -42,13 +42,25 @@ native module to compile, no database server to run).
 ```bash
 npm install
 cp .env.example .env.local
-# the only thing you must set for a local run is nothing at all:
 npm run build
 npm start          # http://localhost:3000
 ```
 
 Sign in with any email — with no SMTP server configured the login code is printed to
-the server log and shown in the UI, so the whole flow works out of the box.
+the server log, so the whole flow works out of the box.
+
+**One thing is genuinely required**, and the server refuses to boot without it,
+before serving anything:
+
+```bash
+echo "SESSION_SECRET=$(openssl rand -base64 48)" >> .env.local
+```
+
+Every session cookie, login code and claim token is an HMAC of that value. If it
+is missing the process exits with a message telling you exactly this. For a
+throwaway local instance you can skip it with `ALLOW_INSECURE_DEFAULTS=1` — but
+then every HMAC in the app is derived from a value that is published in the
+source.
 
 To try it with content in it:
 
@@ -65,9 +77,9 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
 docker compose up -d
 ```
 
-The database is `./data/unngl.sqlite` on the host, and `docker compose down` never
-touches it. Back it up with `sqlite3 data/unngl.sqlite ".backup '/backup.sqlite'"` —
-not `cp`, which can capture a torn state while the database is in WAL mode.
+The database lives in a Docker **named volume**, so `docker compose down` never
+touches it and it is not readable from the rest of the host. `docker-compose.yml`
+comments show how to switch to a bind mount, and the one `chown` that requires.
 
 ### Deploying anywhere else
 
@@ -149,7 +161,7 @@ stored as unverified and the reader is shown that. There is no image library in 
 stack at all, which is the only reason this is possible without a native dependency.
 
 ```bash
-npm test      # 56 tests, including a golden hash that fails if the algorithm drifts
+npm test      # 59 tests, including a golden hash that fails if the algorithm drifts
 ```
 
 ---
@@ -257,7 +269,7 @@ scripts/             samples, assets, seed, start
 - **The image decoder** has hard bounds on edge, pixel count and inflate size,
   all checked before allocation. Dimension bombs and zip bombs are refused in
   about a millisecond.
-- **`npm audit`: 0 vulnerabilities.** 38 security regression tests.
+- **`npm audit`: 0 vulnerabilities.** 41 security regression tests.
 
 Full write-up, threat model and honest limitations:
 [`docs/en/security.md`](docs/en/security.md) ·

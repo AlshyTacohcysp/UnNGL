@@ -16,7 +16,7 @@ Read the [threat model](#threat-model) before the [controls](#controls), and the
 |---|---|
 | `npm audit` (production) | **0 vulnerabilities** |
 | `npm audit` (including dev) | **0 vulnerabilities** |
-| Test suite | **56 passing** (18 algorithm, 38 security regression) |
+| Test suite | **59 passing** (18 algorithm, 41 security regression) |
 | TypeScript | clean, `strict` |
 | Security headers | CSP, HSTS (opt-in), `X-Frame-Options`, COOP, CORP, `nosniff`, `Referrer-Policy`, `Permissions-Policy` |
 | Runtime dependencies | 3 (`next`, `react`, `react-dom`, plus `zod`) |
@@ -360,7 +360,7 @@ small enough to audit by reading. See
 
 ## Testing
 
-`tests/security.test.ts` holds 38 regression tests. Each corresponds either to a
+`tests/security.test.ts` holds 41 regression tests. Each corresponds either to a
 real defect that existed at some point, or to an attack the design must refuse.
 They are written to fail loudly if the protection is ever removed:
 
@@ -377,6 +377,7 @@ They are written to fail loudly if the protection is ever removed:
   protocol-relative URLs and off-site paths refused; null/undefined fall back.
 - **Token generation** (2) — 256 bits in URL-safe base64; uniform first digit
   across 20,000 codes.
+- **Deployment invariants** (3) — the database can never be created inside `.next` (a rebuild would silently delete every message); the `next start` fallback can never be a bare `npx` that downloads a different major; and a missing `SESSION_SECRET` is refused at boot, with the command to fix it.
 - **Rejection typing** (2) — every decoder failure is an `ImageError`, so routes answer 400 with a reason instead of a generic 500; plus a positive control so the typing cannot pass by refusing everything.
 - **Hostile input** (4) — bytes that merely look like a PNG, empty buffers,
   truncated signatures, interlaced images, unknown colour types and filters.

@@ -43,6 +43,24 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   output: 'standalone',
+
+  // Never trace runtime state into the standalone output.
+  //
+  // Next's file tracer follows anything referenced from the app, and the
+  // database path is read at runtime, so `data/unngl.sqlite` was ending up
+  // copied into .next/standalone. That is the directory people copy to a
+  // server, and .dockerignore hides the problem in a Docker build but not in a
+  // plain one: the image — or the tarball — would ship the developer's local
+  // messages, and a fresh instance would start against a stale database.
+  //
+  // The glob is '/**' rather than '*': a bare '*' also matches Next's own
+  // internal routes, and excluding against those strips files out of the
+  // traced copy of the `next` package and produces a standalone server that
+  // dies on startup with MODULE_NOT_FOUND.
+  outputFileTracingExcludes: {
+    '/**': ['data/**', '**/*.sqlite', '**/*.sqlite-wal', '**/*.sqlite-shm'],
+  },
+
   experimental: {
     optimizePackageImports: ['zod'],
   },

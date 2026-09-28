@@ -39,6 +39,17 @@ function absolutise(name) {
 }
 
 if (existsSync(entry)) {
+  // Pin the database to the project root unless the operator chose a path.
+  //
+  // This must not be left to the app's own default, which is
+  // path.join(process.cwd(), 'data', ...) — and the standalone server runs with
+  // .next/standalone as its cwd. Left alone, a deployment with no DATABASE_PATH
+  // set creates its database at .next/standalone/data/unngl.sqlite, and every
+  // `npm run build` deletes .next. The instance then comes back up perfectly
+  // healthy, empty, with every message gone and no error anywhere.
+  if (!process.env.DATABASE_PATH) {
+    process.env.DATABASE_PATH = path.join(root, 'data', 'unngl.sqlite');
+  }
   absolutise('DATABASE_PATH');
 
   // Next does not copy these into the standalone output; the Dockerfile does it
@@ -64,7 +75,19 @@ if (existsSync(entry)) {
   });
   child.on('exit', (code) => process.exit(code ?? 0));
 } else {
-  const result = spawnSync('npx', ['next', 'start', '-H', host, '-p', port], {
+  // No standalone output: fall back to `next start`, but never via bare `npx`.
+  // `npx next start` resolves "next" from the registry when it is not installed
+  // locally, so a checkout without node_modules would silently download and run
+  // a different major version of the framework than this app was built against.
+  const nextBin = path.join(root, 'node_modules', 'next', 'dist', 'bin', 'next');
+  if (!existsSync(nextBin)) {
+    console.error(
+      'UnNGL: no standalone build in .next/standalone, and next is not installed.\n' +
+        'Run `npm install` and `npm run build` first, or use the Docker image.',
+    );
+    process.exit(1);
+  }
+  const result = spawnSync(process.execPath, [nextBin, 'start', '-H', host, '-p', port], {
     stdio: 'inherit',
     cwd: root,
   });

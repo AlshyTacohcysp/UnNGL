@@ -3,7 +3,7 @@
 **Version 1.0.0.** Cette page est la spécification. L'implémentation de référence
 est [`src/lib/palette/extract.ts`](../../src/lib/palette/extract.ts) — le même
 fichier qu'importent le navigateur et le serveur. Il existe un bac à sable
-interactif sur [`/algorithm`](/algorithm) qui l'exécute dans votre navigateur, et
+interactif sur [`/algorithm`](https://unngl.link/algorithm) qui l'exécute dans votre navigateur, et
 une suite de tests avec une empreinte de référence, de sorte que toute
 modification de la sortie fasse échouer l'intégration continue.
 

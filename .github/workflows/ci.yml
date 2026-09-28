@@ -1,0 +1,79 @@
+# Keep the properties this project claims actually true.
+#
+# The README says 0 vulnerabilities, 56 tests, a clean strict typecheck and a
+# working production build. None of those are true forever without something
+# checking, so this checks all four on every push and pull request.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Don't burn minutes re-running a push that the PR already covered.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: typecheck, test, build, audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # node:sqlite is why the floor is 22.5 and not 20.
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Audit (production dependencies)
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Audit (full tree, including dev)
+        # This has been 0 all along, so keep it that way. PostCSS and Vitest
+        # both needed overrides/pins to get here; a routine bump can undo that.
+        run: npm audit --audit-level=moderate
+
+      - name: Build
+        run: npm run build
+
+      - name: The production server actually starts
+        # A build that compiles but produces a server that cannot boot is the
+        # failure mode that matters, and it is not caught by the build itself.
+        # Run it the way an operator would, with a real secret and real HTTPS
+        # origin so the boot audit is exercised rather than skipped.
+        env:
+          SESSION_SECRET: ci-run-only-not-a-real-secret-but-long-enough
+          NEXT_PUBLIC_ORIGIN: https://ci.example.com
+          MAIL_TRANSPORT: console
+        run: |
+          npm start &
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:3000/api/health > /dev/null; then
+              echo "server is up"
+              curl -s http://127.0.0.1:3000/api/health
+              echo
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "server did not become healthy" >&2
+          exit 1

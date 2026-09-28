@@ -3,23 +3,29 @@
 #   cp .env.example .env      # then set SESSION_SECRET
 #   docker compose up -d
 #
-# The SQLite file lives in ./data on the host, so `docker compose down` never
-# touches your messages.
+# State is one SQLite file in a Docker named volume. `docker compose down` never
+# touches it, and it is not readable from anywhere else on the host — see the
+# backup command at the bottom of this file.
 
 services:
   unngl:
     build: .
     image: unngl:latest
     restart: unless-stopped
+    init: true
+    stop_grace_period: 10s
     ports:
       - '3000:3000'
+    # One source of truth for configuration. Every variable, including
+    # NEXT_PUBLIC_ORIGIN, comes from .env via env_file — do not restate them
+    # under `environment`, where a stray shell export would silently win.
     env_file:
       - .env
     environment:
-      NEXT_PUBLIC_ORIGIN: ${NEXT_PUBLIC_ORIGIN:-http://localhost:3000}
+      # Container-specific paths. These are not configurable on purpose.
       DATABASE_PATH: /app/data/unngl.sqlite
     volumes:
-      - ./data:/app/data
+      - unngl_data:/app/data
     healthcheck:
       test:
         - CMD
@@ -30,3 +36,27 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+volumes:
+  unngl_data:
+
+# ── Optional: a bind mount instead ───────────────────────────────────────────
+# Convenient for `ls`-ing your data, but it needs one command first. The image
+# runs as uid 1001, and a directory Docker creates for a bind mount is owned by
+# root, so SQLite cannot create its -wal and -shm files and the container exits
+# on first start. This is the single most common first-run failure, so:
+#
+#   mkdir -p data && sudo chown 1001:1001 data
+#
+# Then replace `unngl_data:/app/data` above with `./data:/app/data` and drop the
+# top-level `volumes:` block.
+#
+# ── Backing up ───────────────────────────────────────────────────────────────
+# Named volume:
+#   docker run --rm -v unngl_data:/data -v "$PWD":/backup alpine \
+#     sh -c 'cd /data && sqlite3 unngl.sqlite ".backup /backup/unngl-$(date +%F).sqlite"'
+# Bind mount:
+#   sqlite3 data/unngl.sqlite ".backup 'unngl-$(date +%F).sqlite'"
+#
+# Use .backup, not cp: the database runs in WAL mode, so copying a live file can
+# capture a torn state.

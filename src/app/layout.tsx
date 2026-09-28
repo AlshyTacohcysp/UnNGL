@@ -42,8 +42,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en">
       <body className="flex min-h-dvh flex-col">
+        {/*
+          Skip link. The design is deliberately loud — big nav, collage cards,
+          hard shadows — which is exactly the kind of page a keyboard user does
+          not want to tab through in full on every page. Off-screen until focused,
+          and the focus ring is already global, so it looks like everything else.
+        */}
+        <a href="#main" className="skip-link">
+          Skip to content
+        </a>
         <Nav user={user ? { email: user.email, display_name: user.display_name } : null} />
-        <main className="flex-1">{children}</main>
+        <main id="main" tabIndex={-1} className="flex-1">
+          {children}
+        </main>
         <Footer />
         <script
           type="application/ld+json"

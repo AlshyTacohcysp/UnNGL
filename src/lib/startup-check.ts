@@ -13,7 +13,45 @@ import { config } from './config';
 
 let done = false;
 
+/**
+ * Refuse to run in production without a real SESSION_SECRET.
+ *
+ * This used to be a lazy getter that threw the first time a login was attempted.
+ * That was worse than useless: the server booted, every page rendered, and the
+ * first person to try to sign in was told "Something went wrong on our side.
+ * Nothing you sent was lost" — which is both false and useless to whoever has to
+ * fix it. A missing secret is an operator error, and it should read like one.
+ */
+function requireProductionSecret(): void {
+  if (!config.isProd) return;
+  if (config.allowInsecureDefaults) return;
+  const secret = process.env.SESSION_SECRET;
+  if (secret && secret.length > 0) return;
+  throw new Error(
+    [
+      '',
+      '  UnNGL cannot start: SESSION_SECRET is not set.',
+      '',
+      '  Every session cookie, login code and claim token is an HMAC of this value.',
+      '  Without it, nobody can sign in and nothing can be verified.',
+      '',
+      '  Generate one and put it in your .env:',
+      '',
+      '      openssl rand -base64 48',
+      '',
+      '  or, with no openssl:',
+      '',
+      '      node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'base64\'))"',
+      '',
+      '  See .env.example. To run a throwaway instance on purpose, set',
+      '  ALLOW_INSECURE_DEFAULTS=1 — and understand exactly what that gives away.',
+      '',
+    ].join('\n'),
+  );
+}
+
 export function auditConfig(): void {
+  requireProductionSecret();
   if (done) return;
   done = true;
 
@@ -64,11 +102,12 @@ export function auditConfig(): void {
  */
 export function auditSecretStrength(): void {
   if (!config.isProd) return;
-  if (config.sessionSecret.length < 32) {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret || config.allowInsecureDefaults) return;
+  if (secret.length < 32) {
     console.error(
-      `[config] WARNING: SESSION_SECRET is ${config.sessionSecret.length} characters; ` +
+      `[config] WARNING: SESSION_SECRET is ${secret.length} characters; ` +
         'use at least 32 (e.g. openssl rand -base64 48).',
     );
   }
 }
-

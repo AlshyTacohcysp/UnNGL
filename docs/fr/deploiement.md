@@ -7,8 +7,9 @@ f tourner UnNGL.
 
 ## Avant toute chose : deux non-négociables
 
-1. **`SESSION_SECRET` doit être défini, et aléatoire.** Le serveur refuse de
-   démarrer en production sans elle.
+1. **`SESSION_SECRET` doit être définie, et aléatoire.** Le serveur refuse de
+   démarrer en production sans elle — il s'arrête immédiatement avec les
+   instructions à suivre, avant de servir la moindre requête.
    ```bash
    openssl rand -base64 48
    ```
@@ -52,11 +53,20 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
-Le fichier SQLite vit dans `./data` sur l'hôte : `docker compose down` puis
-`docker compose up` ne toucheront donc jamais à vos messages. L'image s'exécute
-en utilisateur non privilégié sur le port 3000, possède un healthcheck, et
-embarque la sortie *standalone* de Next.js : l'image finale ne contient ni
-outillage de build ni `node_modules` superflus.
+Le fichier SQLite vit dans un **volume nommé** Docker : `docker compose down`
+ne touche donc jamais à vos messages, et la base n'est lisible depuis nulle part
+ailleurs sur l'hôte. L'image s'exécute en utilisateur non privilégié sur le
+port 3000, possède un healthcheck, et embarque la sortie *standalone* de
+Next.js : l'image finale ne contient ni outillage de build ni `node_modules`
+superflus.
+
+> **Vous voulez voir vos données ?** Passez à un bind mount — mais lancez d'abord
+> `mkdir -p data && sudo chown 1001:1001 data`. L'image s'exécute avec l'uid
+> 1001, et un répertoire que Docker crée pour un bind mount appartient à root :
+> SQLite ne peut alors pas créer ses fichiers `-wal`/`-shm` et le conteneur
+> s'arrête au premier démarrage. C'est l'échec de premier lancement le plus
+> fréquent. Les lignes exactes à modifier sont commentées en bas de
+> `docker-compose.yml`.
 
 Placez un reverse proxy devant (Caddy, nginx, Traefik) pour le TLS. Un
 `Caddyfile` minimal :
@@ -175,6 +185,13 @@ Tout ce qui compte tient dans un fichier.
 
 ```bash
 sqlite3 /srv/unngl/data/unngl.sqlite ".backup '/backups/unngl-$(date +%F).sqlite'"
+```
+
+Avec le volume nommé Docker :
+
+```bash
+docker run --rm -v unngl_data:/data -v "$PWD":/backup alpine \
+  sh -c 'cd /data && sqlite3 unngl.sqlite ".backup /backup/unngl-$(date +%F).sqlite"'
 ```
 
 Utilisez `.backup`, pas `cp`. La base fonctionne en mode WAL : un simple `cp`

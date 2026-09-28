@@ -339,3 +339,62 @@ describe('image rejection typing', () => {
     expect(img.data).toHaveLength(2 * 2 * 4);
   });
 });
+
+/* ------------------------------------------------------------------ *
+ * The database must never live inside .next
+ * ------------------------------------------------------------------ */
+
+describe('deployment invariants', () => {
+  it('pins DATABASE_PATH to the project root, not the standalone cwd', async () => {
+    // Regression, and the worst bug in this file's history. The app defaulted
+    // DATABASE_PATH to path.join(process.cwd(), 'data', ...), but the standalone
+    // server runs with .next/standalone as its cwd — so a deployment that set no
+    // DATABASE_PATH created .next/standalone/data/unngl.sqlite, and every
+    // `npm run build` deleted .next. The instance came back healthy and empty,
+    // with every message gone and nothing in the logs.
+    const { readFileSync } = await import('node:fs');
+    const start = readFileSync(
+      new URL('../scripts/start.mjs', import.meta.url),
+      'utf8',
+    );
+    expect(start).toMatch(/process\.env\.DATABASE_PATH\s*=\s*path\.join\(root,/);
+    // ...and it must happen before the value is resolved against the root, or
+    // the relative-path handling below never sees it.
+    expect(start.indexOf('path.join(root,')).toBeLessThan(
+      start.indexOf("absolutise('DATABASE_PATH')"),
+    );
+  });
+
+  it('never falls back to a bare npx next, which would fetch another major', async () => {
+    // `npx next start` resolves "next" from the registry when it is not installed
+    // locally, so a checkout without node_modules silently downloaded and ran a
+    // different major version of the framework than the app was built against.
+    const { readFileSync } = await import('node:fs');
+    const start = readFileSync(
+      new URL('../scripts/start.mjs', import.meta.url),
+      'utf8',
+    );
+    expect(start).not.toMatch(/spawnSync\(\s*'npx'/);
+  });
+
+  it('refuses to run in production without SESSION_SECRET, at boot', async () => {
+    // It used to be a lazy getter: the server booted, every page rendered, and
+    // the first person to try to sign in was told "something went wrong on our
+    // side". A missing secret is an operator error and must read like one.
+    const { readFileSync } = await import('node:fs');
+    const check = readFileSync(
+      new URL('../src/lib/startup-check.ts', import.meta.url),
+      'utf8',
+    );
+    expect(check).toMatch(/UnNGL cannot start: SESSION_SECRET is not set/);
+    expect(check).toMatch(/openssl rand -base64 48/);
+
+    // ...and it must be wired to something that actually runs at boot.
+    const instrumentation = readFileSync(
+      new URL('../src/instrumentation.ts', import.meta.url),
+      'utf8',
+    );
+    expect(instrumentation).toMatch(/auditConfig\(\)/);
+    expect(instrumentation).toMatch(/process\.exit\(1\)/);
+  });
+});
