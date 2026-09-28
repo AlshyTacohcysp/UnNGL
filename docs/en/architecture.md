@@ -233,14 +233,14 @@ six colours, so the identity and the product are the same object.
 ## Testing
 
 ```bash
-npm test        # 54 tests
+npm test        # 56 tests
 npm run typecheck
 ```
 
 - `tests/palette.test.ts` — 18 tests over the algorithm, including a golden hash
   (`26d88308`) that pins the output for a fixed input, plus edge cases: greyscale,
   fully transparent, single colour, 1×1, non-square.
-- `tests/security.test.ts` — 36 tests covering the hardening: same-origin
+- `tests/security.test.ts` — 38 tests covering the hardening: same-origin
   enforcement, token digests, session cookie naming, secret strength, the PNG
   bomb bounds, SSRF allowlisting, response byte caps, and the health endpoint's
   disclosure rules.

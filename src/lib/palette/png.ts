@@ -14,6 +14,21 @@
 
 import { inflateSync } from 'node:zlib';
 
+/**
+ * A rejection the *sender* should be told about, as a 400 with a reason.
+ *
+ * Every failure inside this module is the caller's file being unacceptable —
+ * never a server fault. Routes distinguish the two with `instanceof` rather
+ * than by matching on message text, so rewording a message can never turn a
+ * correct 400 into a "something went wrong on our side" 500.
+ */
+export class ImageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ImageError';
+  }
+}
+
 const SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] as const;
 
 /**
@@ -59,12 +74,17 @@ export function isPng(bytes: Uint8Array): boolean {
   return SIGNATURE.every((b, i) => bytes[i] === b);
 }
 
-/** Decode a PNG buffer to RGBA8. Throws with a human-readable reason on failure. */
+/**
+ * Decode a PNG buffer to RGBA8.
+ *
+ * Every failure throws an `ImageError` carrying a human-readable reason: this
+ * module never fails for a reason the caller cannot fix.
+ */
 export function decodePng(bytes: Uint8Array, limits: DecodeLimits = {}): DecodedImage {
-  if (!isPng(bytes)) throw new Error('not a PNG file');
+  if (!isPng(bytes)) throw new ImageError('not a PNG file');
   // Chunk lengths are 32-bit; a file shorter than that cannot hold one, and
   // `view.getUint32` would throw a RangeError deep inside the decoder.
-  if (bytes.length > 0x7fffffff) throw new Error('file is too large');
+  if (bytes.length > 0x7fffffff) throw new ImageError('file is too large');
 
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let pos = 8;
@@ -106,11 +126,11 @@ export function decodePng(bytes: Uint8Array, limits: DecodeLimits = {}): Decoded
     }
   }
 
-  if (!ihdr) throw new Error('PNG is missing its IHDR chunk');
-  if (ihdr.interlace !== 0) throw new Error('interlaced PNGs are not supported');
-  if (!CHANNELS[ihdr.colorType]) throw new Error(`unsupported PNG colour type ${ihdr.colorType}`);
-  if (idat.length === 0) throw new Error('PNG has no image data');
-  if (ihdr.colorType === 3 && !palette) throw new Error('indexed PNG is missing its palette');
+  if (!ihdr) throw new ImageError('PNG is missing its IHDR chunk');
+  if (ihdr.interlace !== 0) throw new ImageError('interlaced PNGs are not supported');
+  if (!CHANNELS[ihdr.colorType]) throw new ImageError(`unsupported PNG colour type ${ihdr.colorType}`);
+  if (idat.length === 0) throw new ImageError('PNG has no image data');
+  if (ihdr.colorType === 3 && !palette) throw new ImageError('indexed PNG is missing its palette');
 
   const { width, height, bitDepth, colorType } = ihdr;
 
@@ -118,13 +138,13 @@ export function decodePng(bytes: Uint8Array, limits: DecodeLimits = {}): Decoded
   const maxEdge = limits.maxEdge ?? MAX_EDGE;
   const maxPixels = limits.maxPixels ?? MAX_PIXELS;
   if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) {
-    throw new Error('PNG has invalid dimensions');
+    throw new ImageError('PNG has invalid dimensions');
   }
   if (width > maxEdge || height > maxEdge) {
-    throw new Error(`image is larger than ${maxEdge}px on its longest side`);
+    throw new ImageError(`image is larger than ${maxEdge}px on its longest side`);
   }
   if (width * height > maxPixels) {
-    throw new Error(`image has more than ${maxPixels} pixels`);
+    throw new ImageError(`image has more than ${maxPixels} pixels`);
   }
 
   const channels = CHANNELS[colorType]!;
@@ -136,8 +156,18 @@ export function decodePng(bytes: Uint8Array, limits: DecodeLimits = {}): Decoded
   //     becomes zlib's hard ceiling, so a bomb is refused instead of allocated.
   //     A genuine PNG of this shape always inflates to exactly this much.
   const expected = height * (1 + bytesPerRow);
-  const raw = inflateSync(concat(idat), { maxOutputLength: expected });
-  if (raw.length < expected) throw new Error('PNG pixel data is truncated');
+  let raw: Buffer;
+  try {
+    raw = inflateSync(concat(idat), { maxOutputLength: expected });
+  } catch (err) {
+    // zlib raises its own errors, and the most important one — a stream that
+    // expands past the length IHDR declared — is exactly the zip-bomb case. It
+    // is still a bad file, not a broken server, so it becomes an ImageError and
+    // the sender is told why rather than being handed a generic 500.
+    const reason = err instanceof Error ? err.message : 'could not be decompressed';
+    throw new ImageError(`PNG pixel data is not valid (${reason})`);
+  }
+  if (raw.length < expected) throw new ImageError('PNG pixel data is truncated');
 
   // (3) allocate, now that dimensions and inflated size are both known good
   const scanlines = unfilter(raw, width, height, bytesPerRow, bytesPerPixel);
@@ -193,7 +223,7 @@ function unfilter(
           value = rawByte + paeth(a, b, c);
           break;
         default:
-          throw new Error(`unknown PNG filter type ${filter}`);
+          throw new ImageError(`unknown PNG filter type ${filter}`);
       }
       out[rowStart + x] = value & 0xff;
     }
@@ -291,7 +321,7 @@ function toRgba8(
           break;
         }
         default:
-          throw new Error(`unsupported PNG colour type ${colorType}`);
+          throw new ImageError(`unsupported PNG colour type ${colorType}`);
       }
     }
   }

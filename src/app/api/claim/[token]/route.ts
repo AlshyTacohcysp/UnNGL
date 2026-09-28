@@ -14,6 +14,7 @@ import { attachHintToClaimedMessage, findMessageByClaim } from '@/lib/inbox';
 import { fail, ok, route } from '@/lib/http';
 import { hit } from '@/lib/ratelimit';
 import { claimedPaletteSchema } from '@/lib/validation';
+import { ImageError } from '@/lib/palette/png';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -48,9 +49,21 @@ export const POST = route('claim.attach', async (req: Request, ctx: Ctx) => {
     form.get('palette') ? safeJson(String(form.get('palette'))) : null,
   );
 
-  const view = attachHintToClaimedMessage(token, bytes, claimed.success ? claimed.data : null, 'upload');
-  if (!view) return fail('This claim link is not valid any more.', 404);
-  return ok({ hint: view.hint });
+  try {
+    const view = attachHintToClaimedMessage(
+      token,
+      bytes,
+      claimed.success ? claimed.data : null,
+      'upload',
+    );
+    if (!view) return fail('This claim link is not valid any more.', 404);
+    return ok({ hint: view.hint });
+  } catch (err) {
+    // A rejected file is the sender's problem: 400 with the reason. Anything
+    // else is a server fault and the route wrapper turns it into a 500.
+    if (err instanceof ImageError) return fail(err.message);
+    throw err;
+  }
 });
 
 function safeJson(value: string): unknown {

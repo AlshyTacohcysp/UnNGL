@@ -22,6 +22,7 @@ import { clientIp, fail, ok, route, userAgent } from '@/lib/http';
 import { hit, pruneRateLimits } from '@/lib/ratelimit';
 import { claimedPaletteSchema, messageSchema } from '@/lib/validation';
 import { maybePurge } from '@/lib/images';
+import { ImageError } from '@/lib/palette/png';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,7 +31,7 @@ const readImage = async (form: FormData): Promise<Uint8Array | null> => {
   const file = form.get('image');
   if (!(file instanceof File) || file.size === 0) return null;
   if (file.size > config.limits.maxImageBytes) {
-    throw new Error('That photo is too large. Try one under 2 MB.');
+    throw new ImageError('That photo is too large. Try one under 2 MB.');
   }
   return new Uint8Array(await file.arrayBuffer());
 };
@@ -72,7 +73,8 @@ export const POST = route('messages.send', async (req: Request) => {
   try {
     image = await readImage(form);
   } catch (err) {
-    return fail(err instanceof Error ? err.message : 'That photo could not be read');
+    if (err instanceof ImageError) return fail(err.message);
+    return fail('That photo could not be read');
   }
 
   try {
@@ -95,9 +97,9 @@ export const POST = route('messages.send', async (req: Request) => {
       { status: 201, headers: { 'Cache-Control': 'no-store' } },
     );
   } catch (err) {
-    if (err instanceof Error && err.message.includes('Image')) {
-      return fail(err.message);
-    }
+    // A rejected file is the sender's problem and gets a 400 with a reason.
+    // Anything else is ours, and the route wrapper turns it into a 500.
+    if (err instanceof ImageError) return fail(err.message);
     throw err;
   }
 });

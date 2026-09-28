@@ -149,7 +149,7 @@ stored as unverified and the reader is shown that. There is no image library in 
 stack at all, which is the only reason this is possible without a native dependency.
 
 ```bash
-npm test      # 54 tests, including a golden hash that fails if the algorithm drifts
+npm test      # 56 tests, including a golden hash that fails if the algorithm drifts
 ```
 
 ---
@@ -257,7 +257,7 @@ scripts/             samples, assets, seed, start
 - **The image decoder** has hard bounds on edge, pixel count and inflate size,
   all checked before allocation. Dimension bombs and zip bombs are refused in
   about a millisecond.
-- **`npm audit`: 0 vulnerabilities.** 36 security regression tests.
+- **`npm audit`: 0 vulnerabilities.** 38 security regression tests.
 
 Full write-up, threat model and honest limitations:
 [`docs/en/security.md`](docs/en/security.md) ·

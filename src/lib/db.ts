@@ -177,7 +177,10 @@ const MIGRATIONS: Migration[] = [
         sender_ip    TEXT,
         sender_agent TEXT,
         seen_at      INTEGER,
-        hint_id      TEXT,
+        -- The sender's private token. There is deliberately no hint_id column:
+        -- hints.message_id is the link. An earlier draft had both, leaving a
+        -- column that was never written and that a reader would assume was
+        -- the join.
         claim_hash   TEXT
       );
       CREATE INDEX idx_messages_inbox ON messages(inbox_id, created_at DESC);

@@ -10,6 +10,7 @@ import { currentUserId, setUserAvatar } from '@/lib/auth';
 import { saveAvatarPng } from '@/lib/avatar';
 import { fail, ok, route } from '@/lib/http';
 import { deleteImage } from '@/lib/images';
+import { ImageError } from '@/lib/palette/png';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,7 +29,10 @@ export const POST = route('avatar.set', async (req: Request) => {
     const result = saveAvatarPng(userId, new Uint8Array(await file.arrayBuffer()));
     return ok({ palette: result.palette });
   } catch (err) {
-    return fail(err instanceof Error ? err.message : 'That image could not be read');
+    // Only a rejected file is a 400. An unexpected fault is ours, and must not be
+    // reported to the user as though their picture were at fault.
+    if (err instanceof ImageError) return fail(err.message);
+    throw err;
   }
 });
 

@@ -38,7 +38,6 @@ export interface Message {
   sender_ip: string | null;
   sender_agent: string | null;
   seen_at: number | null;
-  hint_id: string | null;
   claim_hash: string | null;
 }
 

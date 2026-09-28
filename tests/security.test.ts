@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { deflateSync } from 'node:zlib';
-import { decodePng, isPng, MAX_EDGE, MAX_PIXELS } from '../src/lib/palette/png';
+import { decodePng, isPng, ImageError, MAX_EDGE, MAX_PIXELS } from '../src/lib/palette/png';
 import { safeRedirectPath } from '../src/lib/redirect';
 import { isAllowedMediaUrl } from '../src/lib/media';
 
@@ -299,5 +299,43 @@ describe('hostile input', () => {
     const raw = rawScanlines(2, 2);
     raw[0] = 200;
     expect(() => decodePng(forgePng(2, 2, deflateSync(raw)))).toThrow(/filter/);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Image rejection must be a 400 with a reason, not a generic 500
+ * ------------------------------------------------------------------ */
+
+describe('image rejection typing', () => {
+  it('every decoder failure is an ImageError, so routes can answer 400', () => {
+    // Regression: routes used to decide "was this a rejected file?" by testing
+    // `err.message.includes('Image')`. The decoder's messages start with a
+    // lowercase "image", so every hostile file escaped that check and reached
+    // the generic 500 handler — the client was told the server had broken.
+    const bombs: Array<[string, Uint8Array]> = [
+      ['dimension bomb', forgePng(60_000, 60_000, new Uint8Array(16))],
+      ['zero dimensions', forgePng(0, 0, new Uint8Array(16))],
+      ['absurd dimensions', forgePng(0xffffffff, 0xffffffff, new Uint8Array(16))],
+      ['zip bomb', forgePng(8, 8, deflateSync(Buffer.alloc(8 * 1024 * 1024, 0x80)))],
+      ['truncated pixel stream', forgePng(64, 64, new Uint8Array(4))],
+      ['not a PNG at all', new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9])],
+    ];
+    for (const [name, bytes] of bombs) {
+      let err: unknown;
+      try {
+        decodePng(bytes);
+      } catch (e) {
+        err = e;
+      }
+      expect(err, `${name} should be rejected`).toBeInstanceOf(ImageError);
+      expect((err as Error).message, `${name} should carry a reason`).toBeTruthy();
+    }
+  });
+
+  it('a valid image still decodes, so the typing cannot pass by refusing all', () => {
+    const bytes = forgePng(2, 2, deflateSync(rawScanlines(2, 2)));
+    const img = decodePng(bytes);
+    expect(img.width).toBe(2);
+    expect(img.data).toHaveLength(2 * 2 * 4);
   });
 });

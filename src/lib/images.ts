@@ -12,7 +12,7 @@
 import { nanoid } from 'nanoid';
 import { all, get, run } from './db';
 import { config } from './config';
-import { decodePng, isPng } from './palette/png';
+import { decodePng, isPng, ImageError } from './palette/png';
 import { extractPalette, type Palette } from './palette/extract';
 
 export interface StoredImage {
@@ -33,16 +33,19 @@ export function storeImage(
   bytes: Uint8Array,
   opts: { retainDays?: number | null; mime?: string } = {},
 ): StoredImage {
+  // Every rejection below is `ImageError` so a route can answer 400 with a
+  // reason. A plain Error here would be indistinguishable from a server fault
+  // and would surface as a generic 500 to a sender who did nothing wrong.
   if (bytes.length > config.limits.maxImageBytes) {
-    throw new Error(`Image is larger than ${Math.round(config.limits.maxImageBytes / 1024)} kB`);
+    throw new ImageError(`Image is larger than ${Math.round(config.limits.maxImageBytes / 1024)} kB`);
   }
   if (!isPng(bytes)) {
-    throw new Error('Only PNG uploads are accepted (the browser transcodes for you)');
+    throw new ImageError('Only PNG uploads are accepted (the browser transcodes for you)');
   }
   const decoded = decodePng(bytes);
   const edge = Math.max(decoded.width, decoded.height);
   if (edge > config.limits.maxImageEdge) {
-    throw new Error(`Image is larger than ${config.limits.maxImageEdge}px on its longest side`);
+    throw new ImageError(`Image is larger than ${config.limits.maxImageEdge}px on its longest side`);
   }
   const now = Date.now();
   const id = nanoid(16);
@@ -81,7 +84,10 @@ export function deleteImage(id: string): void {
   run('DELETE FROM images WHERE id = ?', id);
 }
 
-/** Decoded pixels -> palette, using the exact same code the browser ran. */
+/**
+ * Decoded pixels -> palette, using the exact same code the browser ran.
+ * Throws `ImageError` if the bytes are not a decodable, in-bounds PNG.
+ */
 export function analyzePng(bytes: Uint8Array): ImageAnalysis {
   const img = decodePng(bytes);
   const palette = extractPalette(img.data, img.width, img.height);
