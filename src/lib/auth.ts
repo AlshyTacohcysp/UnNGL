@@ -18,7 +18,18 @@ import { get, run } from './db';
 import { config } from './config';
 import { digestCode, digestToken, loginCode, normalizeEmail, randomToken, safeEqual } from './crypto';
 
+/**
+ * In production the cookie is named with the `__Host-` prefix, which browsers
+ * enforce: it is only accepted if it is Secure, sent only to this exact host
+ * (no Domain attribute) and has Path=/. That removes subdomain cookie
+ * injection as an attack — an attacker who can set a cookie for
+ * unngl.link.evil.com cannot forge a session for unngl.link.
+ *
+ * The name is read through this function everywhere, so the two values can
+ * never drift apart.
+ */
 const SESSION_COOKIE = 'unngl_session';
+const SESSION_COOKIE_SECURE = '__Host-unngl_session';
 const LOGIN_CODE_TTL_MS = 10 * 60 * 1000;
 const MAX_CODE_ATTEMPTS = 5;
 
@@ -249,7 +260,7 @@ export function destroyAllSessions(userId: string): void {
 }
 
 export function sessionCookieName(): string {
-  return SESSION_COOKIE;
+  return config.isProd ? SESSION_COOKIE_SECURE : SESSION_COOKIE;
 }
 
 /** The signed-in user for this request, or null. */

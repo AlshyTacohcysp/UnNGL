@@ -78,6 +78,27 @@ export const config = {
       },
     };
   },
+  /**
+   * Whether a login code may be returned in the API response so the sign-in
+   * form can display it.
+   *
+   * This is a development convenience and a serious hazard if it ever turns on
+   * in production: the response would hand a working login code to whoever asked
+   * for one, for any address, which is account takeover for anyone whose email is
+   * known. It therefore needs an explicit opt-in *and* a non-production
+   * NODE_ENV *and* the console transport.
+   */
+  get exposeDevCodes() {
+    return !this.isProd && process.env.EXPOSE_DEV_CODES === '1' && this.mail.transport === 'console';
+  },
+  /**
+   * Whether to believe X-Forwarded-For and friends. Off by default: if the app
+   * is reachable directly, a client can put whatever it likes in those headers
+   * and walk straight through every per-IP rate limit.
+   */
+  get trustProxy() {
+    return bool(process.env.TRUSTED_PROXY, false);
+  },
   limits: {
     /** Uploads: decoded pixels are capped so a bomb can't exhaust memory. */
     maxImageBytes: Number(process.env.MAX_IMAGE_BYTES ?? 2 * 1024 * 1024),

@@ -15,6 +15,7 @@ import {
 } from '@/lib/auth';
 import { buildLoginMail, sendLoginCode } from '@/lib/mail';
 import { fail, ok, route } from '@/lib/http';
+import { config } from '@/lib/config';
 import { emailSchema } from '@/lib/validation';
 
 export const runtime = 'nodejs';
@@ -40,8 +41,10 @@ export const POST = route('account.email.add', async (req: Request) => {
 
   const { code } = issueLoginCode(parsed.data, 'add_email');
   const mail = buildLoginMail(parsed.data, code);
-  const transport = await sendLoginCode(parsed.data, code, mail.url);
-  return ok({ sent: true, transport, devCode: transport === 'console' ? code : undefined });
+  await sendLoginCode(parsed.data, code, mail.url);
+  // See config.exposeDevCodes: never leak a working code back to the caller in
+  // production, whoever the address belongs to.
+  return ok({ sent: true, devCode: config.exposeDevCodes ? code : undefined });
 });
 
 export const PUT = route('account.email.verify', async (req: Request) => {

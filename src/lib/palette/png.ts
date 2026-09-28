@@ -16,6 +16,28 @@ import { inflateSync } from 'node:zlib';
 
 const SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] as const;
 
+/**
+ * Hard ceiling on a decoded image, enforced *before* anything is allocated.
+ *
+ * A PNG declares its dimensions in its first 40 bytes, and its pixel data comes
+ * out of the IDAT stream. Both are attacker-controlled, so neither can be
+ * trusted: a 60-byte file can declare 60000x60000 and inflate to gigabytes.
+ *
+ * The defence is threefold, and all three must pass:
+ *   1. dimensions are validated against these caps immediately after IHDR,
+ *   2. the expected inflated size is derived from those dimensions and used as
+ *      the *exact* `maxOutputLength` for inflate, so a compression bomb is
+ *      refused by zlib rather than by the allocator,
+ *   3. buffers are allocated only once the checks above have passed.
+ */
+export const MAX_EDGE = 1024;
+export const MAX_PIXELS = 4_000_000;
+
+export interface DecodeLimits {
+  maxEdge?: number;
+  maxPixels?: number;
+}
+
 export interface DecodedImage {
   data: Uint8ClampedArray;
   width: number;
@@ -38,8 +60,11 @@ export function isPng(bytes: Uint8Array): boolean {
 }
 
 /** Decode a PNG buffer to RGBA8. Throws with a human-readable reason on failure. */
-export function decodePng(bytes: Uint8Array): DecodedImage {
+export function decodePng(bytes: Uint8Array, limits: DecodeLimits = {}): DecodedImage {
   if (!isPng(bytes)) throw new Error('not a PNG file');
+  // Chunk lengths are 32-bit; a file shorter than that cannot hold one, and
+  // `view.getUint32` would throw a RangeError deep inside the decoder.
+  if (bytes.length > 0x7fffffff) throw new Error('file is too large');
 
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let pos = 8;
@@ -88,12 +113,33 @@ export function decodePng(bytes: Uint8Array): DecodedImage {
   if (ihdr.colorType === 3 && !palette) throw new Error('indexed PNG is missing its palette');
 
   const { width, height, bitDepth, colorType } = ihdr;
+
+  // (1) dimensions, before any allocation
+  const maxEdge = limits.maxEdge ?? MAX_EDGE;
+  const maxPixels = limits.maxPixels ?? MAX_PIXELS;
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) {
+    throw new Error('PNG has invalid dimensions');
+  }
+  if (width > maxEdge || height > maxEdge) {
+    throw new Error(`image is larger than ${maxEdge}px on its longest side`);
+  }
+  if (width * height > maxPixels) {
+    throw new Error(`image has more than ${maxPixels} pixels`);
+  }
+
   const channels = CHANNELS[colorType]!;
   const bitsPerPixel = channels * bitDepth;
   const bytesPerPixel = Math.max(1, Math.ceil(bitsPerPixel / 8));
   const bytesPerRow = Math.ceil((width * bitsPerPixel) / 8);
 
-  const raw = inflateSync(concat(idat));
+  // (2) The exact inflated size follows from IHDR: one filter byte per row. It
+  //     becomes zlib's hard ceiling, so a bomb is refused instead of allocated.
+  //     A genuine PNG of this shape always inflates to exactly this much.
+  const expected = height * (1 + bytesPerRow);
+  const raw = inflateSync(concat(idat), { maxOutputLength: expected });
+  if (raw.length < expected) throw new Error('PNG pixel data is truncated');
+
+  // (3) allocate, now that dimensions and inflated size are both known good
   const scanlines = unfilter(raw, width, height, bytesPerRow, bytesPerPixel);
   return toRgba8(scanlines, width, height, bitDepth, colorType, palette, trns, bytesPerRow);
 }
@@ -178,7 +224,7 @@ function toRgba8(
   const out = new Uint8ClampedArray(width * height * 4);
 
   /** Read the `i`-th sample of a row, honouring sub-byte bit depths. */
-  const sample = (row: Uint8Array, i: number, max: number): number => {
+  const sample = (row: Uint8Array, i: number): number => {
     if (bitDepth === 8) return row[i]!;
     if (bitDepth === 16) return row[i * 2]!; // take the high byte
     const perByte = 8 / bitDepth;
@@ -188,7 +234,6 @@ function toRgba8(
     const raw = (byte >> shift) & mask;
     return bitDepth === 1 ? raw * 255 : Math.round((raw / mask) * 255);
   };
-  const scale16 = (v: number) => v; // 16-bit handled by taking the high byte
 
   for (let y = 0; y < height; y++) {
     const row = px.subarray(y * bytesPerRow, (y + 1) * bytesPerRow);
@@ -197,16 +242,16 @@ function toRgba8(
       switch (colorType) {
         case 0: {
           // greyscale
-          const g = sample(row, x, 1);
+          const g = sample(row, x);
           out[o] = out[o + 1] = out[o + 2] = g;
           out[o + 3] = trns && trns.length >= 2 && sample16At(trns, 0) === g * 257 ? 0 : 255;
           break;
         }
         case 2: {
           // truecolour
-          const r = sample(row, x * 3 + 0, 3);
-          const g = sample(row, x * 3 + 1, 3);
-          const b = sample(row, x * 3 + 2, 3);
+          const r = sample(row, x * 3 + 0);
+          const g = sample(row, x * 3 + 1);
+          const b = sample(row, x * 3 + 2);
           out[o] = r;
           out[o + 1] = g;
           out[o + 2] = b;
@@ -222,7 +267,7 @@ function toRgba8(
         }
         case 3: {
           // indexed
-          const idx = sample(row, x, 1);
+          const idx = sample(row, x);
           const p = idx * 3;
           out[o] = palette?.[p] ?? 0;
           out[o + 1] = palette?.[p + 1] ?? 0;
@@ -232,17 +277,17 @@ function toRgba8(
         }
         case 4: {
           // greyscale + alpha
-          const g = sample(row, x * 2 + 0, 2);
+          const g = sample(row, x * 2 + 0);
           out[o] = out[o + 1] = out[o + 2] = g;
-          out[o + 3] = sample(row, x * 2 + 1, 2);
+          out[o + 3] = sample(row, x * 2 + 1);
           break;
         }
         case 6: {
           // truecolour + alpha
-          out[o] = sample(row, x * 4 + 0, 4);
-          out[o + 1] = sample(row, x * 4 + 1, 4);
-          out[o + 2] = sample(row, x * 4 + 2, 4);
-          out[o + 3] = sample(row, x * 4 + 3, 4);
+          out[o] = sample(row, x * 4 + 0);
+          out[o + 1] = sample(row, x * 4 + 1);
+          out[o + 2] = sample(row, x * 4 + 2);
+          out[o + 3] = sample(row, x * 4 + 3);
           break;
         }
         default:
@@ -250,7 +295,6 @@ function toRgba8(
       }
     }
   }
-  void scale16;
   return { data: out, width, height };
 }
 

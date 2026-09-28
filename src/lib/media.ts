@@ -98,8 +98,26 @@ export async function fetchImage(rawUrl: string): Promise<FetchedImage> {
   const declared = Number(response.headers.get('content-length') ?? 0);
   if (declared > limit) throw new MediaError('That image is too large');
 
-  const bytes = Buffer.from(await response.arrayBuffer());
-  if (bytes.length > limit) throw new MediaError('That image is too large');
+  // Read the body through a hard byte cap rather than arrayBuffer(): a chunked
+  // response declares no content-length, and waiting to buffer it first is how a
+  // server gets OOM-killed by a URL someone pasted into a text box.
+  const reader = response.body?.getReader();
+  if (!reader) throw new MediaError('That image had no body');
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    total += value.byteLength;
+    if (total > limit) {
+      await reader.cancel();
+      throw new MediaError('That image is too large');
+    }
+    chunks.push(value);
+  }
+
+  const bytes = Buffer.concat(chunks, total);
   if (bytes.length === 0) throw new MediaError('That image was empty');
   return { bytes, contentType };
 }

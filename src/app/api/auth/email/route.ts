@@ -36,14 +36,13 @@ export const POST = route('auth.email', async (req: Request) => {
   pruneLoginTokens();
   const { code } = issueLoginCode(parsed.data.email, 'login');
   const mail = buildLoginMail(parsed.data.email, code);
-  const transport = await sendLoginCode(parsed.data.email, code, mail.url);
+  await sendLoginCode(parsed.data.email, code, mail.url);
 
   return ok({
     sent: true,
-    transport,
-    // With no SMTP server configured the code is handed back so the operator
-    // (or a demo) can complete the flow. Never does this in a real deployment.
-    devCode: transport === 'console' ? code : undefined,
+    // The code itself is only ever returned when the operator has explicitly
+    // opted in on a non-production deployment. See config.exposeDevCodes.
+    devCode: config.exposeDevCodes ? code : undefined,
     expiresInSeconds: 600,
   });
 });

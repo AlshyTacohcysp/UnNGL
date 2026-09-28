@@ -24,7 +24,10 @@ export const metadata: Metadata = {
       'The hint is the sender’s whole colour palette. Free, open source, and the algorithm is published.',
   },
   twitter: { card: 'summary_large_image' },
-  robots: { index: true, follow: true },
+  // No `robots` here on purpose: "index, follow" is the default, and stating it in
+  // the root layout produced a second robots meta tag on every page that sets its
+  // own (e.g. inboxes and claim links, which are noindex). Pages opt in or out
+  // individually; silence at the root means one tag, never two.
   alternates: { canonical: '/' },
 };
 

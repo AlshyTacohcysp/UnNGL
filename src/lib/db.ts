@@ -12,6 +12,7 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config';
+import { auditConfig, auditSecretStrength } from './startup-check';
 
 // node:sqlite is flagged experimental on Node 22. The warning is noise for
 // operators who chose this stack, and silencing it beats a log full of it.
@@ -34,6 +35,11 @@ interface DbGlobal {
 const g = globalThis as unknown as DbGlobal;
 
 function open(): DatabaseSync {
+  // Boot-time configuration audit: warns loudly about settings that would
+  // weaken the instance, rather than leaving them to be discovered later.
+  auditConfig();
+  auditSecretStrength();
+
   const file = config.databasePath;
   if (file !== ':memory:') {
     fs.mkdirSync(path.dirname(file), { recursive: true });

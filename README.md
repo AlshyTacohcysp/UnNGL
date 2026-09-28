@@ -25,7 +25,7 @@ UnNGL inverts it:
 | What you get | often vague, sometimes fake | six exact hex values from a published algorithm |
 | Can you check it? | no | yes — recompute it yourself, we publish the spec |
 | What happens to photos | stored and resold | deleted 7 days after the palette is derived |
-| IP addresses | stored | never stored, only a salted digest for rate limiting |
+| IP addresses | stored | never stored raw, only a truncated HMAC per message |
 | Source | closed | AGPL, self-hostable, one SQLite file |
 
 A palette is a genuinely good hint: to someone who *knows* you it is an unmistakable
@@ -65,7 +65,9 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
 docker compose up -d
 ```
 
-The database is `./data/unngl.sqlite` on the host. Back it up by copying that file.
+The database is `./data/unngl.sqlite` on the host, and `docker compose down` never
+touches it. Back it up with `sqlite3 data/unngl.sqlite ".backup '/backup.sqlite'"` —
+not `cp`, which can capture a torn state while the database is in WAL mode.
 
 ### Deploying anywhere else
 
@@ -147,7 +149,7 @@ stored as unverified and the reader is shown that. There is no image library in 
 stack at all, which is the only reason this is possible without a native dependency.
 
 ```bash
-npm test      # 18 tests, including a golden hash that fails if the algorithm drifts
+npm test      # 54 tests, including a golden hash that fails if the algorithm drifts
 ```
 
 ---
@@ -165,8 +167,10 @@ npm test      # 18 tests, including a golden hash that fails if the algorithm dr
 | **Auth written here** | email codes + one generic OAuth client instead of a framework that would decide our schema |
 | **Self-hosted fonts** | fontsource packages, not Google — a privacy product must not call Google |
 
-Dependencies, in full: `next`, `react`, `react-dom`, `zod`, `nanoid`, two fontsource
-packages. That's it.
+Dependencies, in full: `next`, `react`, `react-dom`, `zod`, `nanoid`, and two Fontsource
+packages. That's it — and the pieces most worth attacking (image decoding, SMTP,
+hashing, HTTP fetching) are written in-repo so the tree's attack surface stays small
+enough to audit by reading. See [`docs/en/security.md`](docs/en/security.md#supply-chain).
 
 ---
 
@@ -215,7 +219,7 @@ src/
     i/[slug]/        owner's inbox
     h/[token]/       sender's claim link
     algorithm/       the published spec + playground
-    api/             14 route handlers
+    api/             16 route handlers
   components/        collage, composer, hint picker, panels, playground
   lib/
     palette/
@@ -232,6 +236,50 @@ src/
 tests/palette.test.ts
 scripts/             samples, assets, seed, start
 ```
+
+---
+
+## Security
+
+- **No passwords anywhere.** Email is a 6-digit code, HMAC-digested, 10-minute
+  expiry, single-use, attempt-capped, rate-limited per address and per IP. OAuth
+  is an addition, never the main path, and provider tokens are discarded
+  immediately.
+- **Sessions** are 256-bit random tokens stored only as
+  `HMAC-SHA256(SESSION_SECRET, token)`, in a `__Host-` prefixed, `HttpOnly`,
+  `Secure`, `SameSite=Lax` cookie in production. A database dump yields no usable
+  session.
+- **CSRF** is refused centrally: every route is wrapped by `route()`, which
+  enforces same-origin on all mutating methods.
+- **Rate limiting fails closed** — with no trusted proxy, the app cannot identify
+  clients and shares one bucket, because a limiter that can be walked through by
+  setting a header is worse than none.
+- **The image decoder** has hard bounds on edge, pixel count and inflate size,
+  all checked before allocation. Dimension bombs and zip bombs are refused in
+  about a millisecond.
+- **`npm audit`: 0 vulnerabilities.** 36 security regression tests.
+
+Full write-up, threat model and honest limitations:
+[`docs/en/security.md`](docs/en/security.md) ·
+[`docs/fr/securite.md`](docs/fr/securite.md) · [`SECURITY.md`](SECURITY.md)
+
+---
+
+## Documentation
+
+The full documentation is in **English** and **Français**, and covers the same
+ground:
+
+| | English | Français |
+|---|---|---|
+| Index | [`docs/en/README.md`](docs/en/README.md) | [`docs/fr/README.md`](docs/fr/README.md) |
+| Getting started | [`docs/en/getting-started.md`](docs/en/getting-started.md) | [`docs/fr/demarrage.md`](docs/fr/demarrage.md) |
+| Deployment | [`docs/en/deployment.md`](docs/en/deployment.md) | [`docs/fr/deploiement.md`](docs/fr/deploiement.md) |
+| Architecture | [`docs/en/architecture.md`](docs/en/architecture.md) | [`docs/fr/architecture.md`](docs/fr/architecture.md) |
+| The palette algorithm | [`docs/en/algorithm.md`](docs/en/algorithm.md) | [`docs/fr/algorithme.md`](docs/fr/algorithme.md) |
+| API reference | [`docs/en/api.md`](docs/en/api.md) | [`docs/fr/api.md`](docs/fr/api.md) |
+| Security | [`docs/en/security.md`](docs/en/security.md) | [`docs/fr/securite.md`](docs/fr/securite.md) |
+| Contributing | [`docs/en/contributing.md`](docs/en/contributing.md) | [`docs/fr/contribuer.md`](docs/fr/contribuer.md) |
 
 ---
 
