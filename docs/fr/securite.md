@@ -18,10 +18,10 @@ déployer.
 |---|---|
 | `npm audit` (production) | **0 vulnérabilité** |
 | `npm audit` (y compris le développement) | **0 vulnérabilité** |
-| Suite de tests | **74 réussis** (18 algorithme, 56 régression sécurité) |
+| Suite de tests | **99 réussis** (18 algorithme, 56 régression sécurité, 25 handles) |
 | TypeScript | propre, `strict` |
 | En-têtes de sécurité | CSP, HSTS (optionnel), `X-Frame-Options`, COOP, CORP, `nosniff`, `Referrer-Policy`, `Permissions-Policy` |
-| Dépendances de runtime | 3 (`next`, `react`, `react-dom`, plus `zod`) |
+| Dépendances de runtime | 8 — `next`, `react`, `react-dom`, `zod`, `nanoid`, `postgres`, et deux paquets Fontsource |
 
 Il n'y a pas d'audit de sécurité externe. Ceci est un auto-audit par les gens qui
 ont écrit le code, ce qui vaut moins qu'un audit indépendant — et c'est dit ici
@@ -188,6 +188,14 @@ compteur. Les compartiments sont par boîte (10 envois/heure) et par IP
 (30/heure), plus des compartiments distincts pour les demandes de code, les
 vérifications de code, la création de boîtes et les récupérations de médias.
 
+Le compartiment `handle` existe parce que la disponibilité d'un handle est un
+oracle d'énumération : sans limitation, n'importe qui de connecté pourrait
+parcourir l'espace de noms et apprendre quels noms d'autres personnes
+occupent. Vérifier un nom coûte 120/heure par utilisateur et 200/heure par IP ;
+réclamer ou renommer réellement un nom coûte 10/heure par utilisateur et
+30/heure par IP, en plus du compartiment `create` qui protège déjà la création
+de boîtes.
+
 Le compteur est incrémenté et relu en **une seule** instruction — un `upsert` avec
 `RETURNING` — et le compteur de tentatives d'un code de connexion est réclamé de
 la même façon par un `UPDATE … RETURNING`. Ce n'est pas une micro-optimisation.
@@ -353,7 +361,10 @@ connexion ne révèlent pas si une adresse possède un compte.
 - **Les avatars sont stockés comme palettes** — six valeurs hexadécimales. Le
   fichier téléversé est décodé, validé, puis abandonné.
 - **La suppression de compte est en cascade** vers sessions, comptes OAuth,
-  boîtes, messages, indices et images.
+  boîtes, messages, indices et images. Un handle est une colonne de la ligne de
+  la boîte, et les handles retirés y sont rattachés eux aussi : un nom choisi
+  disparaît donc avec le compte, au lieu d'être orphelin et récupérable par un
+  inconnu.
 - Rien n'est vendu, et aucun mécanisme ne le permettrait.
 
 ### 14. Secrets
@@ -395,11 +406,12 @@ PostCSS est épinglé en **8.5.28** via une surcharge de paquet, au-delà de
 l'avis de 8.5.23, et Vitest est en **5.0.2**, au-delà du sien. Next.js est
 maintenu en **15.5.26 ou plus** — ne le rétrogradez pas.
 
-Les dépendances de runtime sont `next`, `react`, `react-dom` et `zod`. Les
-pièces qui seraient normalement des paquets — décodage PNG, SMTP, hachage,
-requêtes HTTP — sont écrites dans le dépôt précisément pour que la surface
-d'attaque de l'arbre de dépendances soit assez petite pour être auditée par
-lecture. Voir [architecture](architecture.md#les-dépendances).
+Les dépendances de runtime sont `next`, `react`, `react-dom`, `zod`, `nanoid`,
+`postgres`, et deux paquets Fontsource. Les pièces qui seraient normalement des
+paquets — décodage PNG, SMTP, hachage, requêtes HTTP — sont écrites dans le
+dépôt précisément pour que la surface d'attaque de l'arbre de dépendances soit
+assez petite pour être auditée par lecture. Voir
+[architecture](architecture.md#les-dépendances).
 
 > **Auto-hébergeurs :** le pilote PostgreSQL est le paquet `postgres` en
 > JavaScript pur, et non `pg` ou `better-sqlite3` : il n'y a aucun module natif à compiler et
@@ -434,7 +446,14 @@ Ils sont écrits pour échouer bruyamment si la protection est un jour retirée 
   inconnus.
 
 Plus `tests/palette.test.ts` (18) pour l'algorithme, dont une empreinte de
-référence (`26d88308`) qui fige la sortie pour une entrée donnée.
+référence (`26d88308`) qui fige la sortie pour une entrée donnée, et
+`tests/handle.test.ts` (25), qui couvre les parties d'un handle qui touchent à
+la sécurité plutôt que au cosmétique : qu'un nom ne puisse jamais masquer une
+route que l'application possède, usurper le service ou sa messagerie, se lire
+comme un domaine de premier niveau, ni cacher un nom réservé derrière des
+points et des tirets ; qu'un point initial, un séparateur de chemin, du balisage,
+un octet nul et tout ce qui n'est pas ASCII soient refusés d'emblée ; et que
+l'indication affichée pendant la saisie ne révèle jamais si un nom est pris.
 
 ```bash
 npm test

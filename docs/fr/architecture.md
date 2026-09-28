@@ -47,6 +47,9 @@ Dépendances de runtime, en totalité :
 | `next` | le framework |
 | `react`, `react-dom` | le framework |
 | `zod` | chaque corps de requête est validé par un schéma |
+| `nanoid` | jetons opaques et slugs |
+| `postgres` | le pilote de base de données |
+| `@fontsource-variable/figtree`, `@fontsource/instrument-serif` | les fontes, embarquées |
 
 Tout le reste est soit dans Node 22, soit écrit ici.
 
@@ -280,14 +283,19 @@ dangereux.
 
 - Deux familles typographiques, toutes deux embarquées via Fontsource (Google
   Fonts est injoignable depuis l'environnement de build, et embarquer est de
-  toute façon préférable) : **Bricolage Grotesque** pour la structure,
-  **Instrument Serif italique** pour la voix humaine, utilisée avec parcimonie
-  et à dessein.
-- Ombres dures (4 px, zéro flou), contours à l'encre (2,5 px `#16130f`), grain de
-  papier, et une inclinaison délibérée de 1 à 2° sur chaque carte.
-- Aucun angle arrondi, nulle part.
-- Le collage de palette est la composante signature : un grand morceau dominant
-  plus cinq bandes déchirées, chacune étiquetée avec son hex.
+  toute façon préférable) : **Figtree** pour la structure, **Instrument Serif**
+  — romain et italique — pour la voix humaine, utilisée avec parcimonie et à
+  dessein.
+- Un champ lavande (`#e9e9f2`) où flottent des cartes blanches arrondies à 24 px.
+  Rien ne porte de contour à l'encre ; les surfaces sont séparées par la couleur
+  et le blanc.
+- L'encre est un bleu marine profond `#1b1b33`, pas noir.
+- Une seule ombre dure dans toute l'application, sous le bouton principal :
+  `0 4px 0` en corail.
+- La palette est la composante signature, et c'est toujours de la couleur, jamais
+  la photo : un aplat avec quatre grands cercles rognés (`PalettePanel`), une
+  pilule segmentée à coins arrondis (`PaletteStrip`), une pilule de points
+  (`PaletteDots`) et un disque rogné (`PaletteDisc`).
 
 `npm run assets` régénère le favicon et la carte Open Graph à partir des mêmes
 six couleurs : l'identité et le produit sont le même objet.

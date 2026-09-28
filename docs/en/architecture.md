@@ -46,6 +46,9 @@ Runtime dependencies, in full:
 | `next` | the framework |
 | `react`, `react-dom` | the framework |
 | `zod` | every request body is validated by a schema |
+| `nanoid` | opaque tokens and slugs |
+| `postgres` | the database driver |
+| `@fontsource-variable/figtree`, `@fontsource/instrument-serif` | fonts, vendored |
 
 Everything else is either in Node 22 or written here.
 
@@ -265,13 +268,16 @@ where proceeding is actually unsafe.
 
 - Two type families, both vendored through Fontsource (Google Fonts is not
   reachable from the build environment, and vendoring is better anyway):
-  **Bricolage Grotesque** for structure, **Instrument Serif italic** for human
+  **Figtree** for structure, **Instrument Serif** — roman and italic — for human
   voice, used sparingly and on purpose.
-- Hard shadows (4px, zero blur), ink outlines (2.5px `#16130f`), paper grain,
-  and a deliberate 1–2° tilt on every card.
-- No border-radius, anywhere.
-- The palette collage is the signature component: one dominant scrap plus five
-  shredded strips, each labelled with its hex.
+- A lavender field (`#e9e9f2`) with white cards rounded to 24px. Nothing carries
+  an ink outline; surfaces are separated by colour and whitespace.
+- Ink is deep navy `#1b1b33`, not black.
+- One hard shadow in the entire app, under the primary button: `0 4px 0` in coral.
+- The palette is the signature component, and it is always colour, never a photo:
+  a flat ground with four large cropped circles (`PalettePanel`), a rounded
+  segmented pill (`PaletteStrip`), a dot pill (`PaletteDots`) and a clipped disc
+  (`PaletteDisc`).
 
 `npm run assets` regenerates the favicon and the Open Graph card from the same
 six colours, so the identity and the product are the same object.

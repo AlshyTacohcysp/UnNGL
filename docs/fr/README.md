@@ -94,20 +94,27 @@ photo et un algorithme documenté suffisent.
 
 ## Le design
 
-La direction artistique « collage v3 », construite comme un système dans
+La direction reprise des maquettes d'écran, construite comme un système dans
 `src/app/globals.css` :
 
-- **Bricolage Grotesque** pour tout ce qui est structurel ; **Instrument
-  Serif italique** pour une seule chose à la fois : une voix humaine (corps des
-  messages, légendes).
-- **Contours à l'encre partout** (2,5 px `#16130f`), **ombres dures** (décalage
-  de 4 px, zéro flou) et un désalignement délibéré — chaque carte est inclinée
-  d'un degré ou deux, comme des bouts de papier posés à la main.
-- Papier crème `#f6f1e6` avec un grain, vermillon, lime acide, bleu d'encre.
-- **Aucun angle arrondi, nulle part.** Le site est fait de rectangles et de
-  filets.
-- Le collage de palette est l'objet signature : un grand morceau dominant plus
-  cinq bandes déchirées, chacune décalée, chacune étiquetée avec son hex.
+- **Figtree** pour tout ce qui est structurel ; **Instrument Serif** (romain et
+  italique) pour une seule chose à la fois : une voix humaine (corps des
+  messages, la question au-dessus du composeur, légendes). Les deux sont
+  embarquées via Fontsource.
+- La page est un champ lavande doux (`#e9e9f2`) et les cartes flottent dessus en
+  blanc pur, arrondies à 24 px. **Rien n'a de contour à l'encre** — les
+  surfaces sont séparées par la couleur et le blanc, pas par une bordure.
+- L'encre est un bleu marine profond (`#1b1b33`), jamais noir. Cela repose mieux
+  sur le lavande.
+- **La seule arête dure de l'application est l'ombre sous le bouton principal** :
+  une dalle corail (`#f2543d`) qui dépasse en bas à droite, comme un décalage de
+  risographie. C'est le seul endroit où une ombre dure apparaît.
+- Six couleurs portent la promesse du produit : ambre, corail, sarcelle, indigo,
+  rose, ciel.
+- La palette est l'objet signature, et c'est toujours de la **couleur, jamais la
+  photo** : un aplat avec quatre grands cercles rognés dans la boîte de réception,
+  une pilule segmentée à coins arrondis sur le composeur, une pilule de points et
+  un disque dans le schéma.
 
 Le favicon et la carte Open Graph sont générés par `npm run assets` à partir des
 mêmes six couleurs : l'identité et le produit sont visiblement la même chose.

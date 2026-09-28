@@ -16,10 +16,10 @@ Read the [threat model](#threat-model) before the [controls](#controls), and the
 |---|---|
 | `npm audit` (production) | **0 vulnerabilities** |
 | `npm audit` (including dev) | **0 vulnerabilities** |
-| Test suite | **74 passing** (18 algorithm, 56 security regression) |
+| Test suite | **99 passing** (18 algorithm, 56 security regression, 25 handles) |
 | TypeScript | clean, `strict` |
 | Security headers | CSP, HSTS (opt-in), `X-Frame-Options`, COOP, CORP, `nosniff`, `Referrer-Policy`, `Permissions-Policy` |
-| Runtime dependencies | 3 (`next`, `react`, `react-dom`, plus `zod`) |
+| Runtime dependencies | 8 — `next`, `react`, `react-dom`, `zod`, `nanoid`, `postgres`, and two Fontsource packages |
 
 There is no external security audit. This is a self-audit by the people who wrote
 it, which is worth less than an independent one, and is stated here so nobody has
@@ -172,6 +172,12 @@ Anything else falls back to `/inbox`. Tested.
 `ratelimit.ts` is a counter table: bucket, window start, count. Buckets are
 per inbox (10 sends/hour) and per IP (30/hour), plus separate buckets for code
 requests, code verifications, inbox creation, and media fetches.
+
+The `handle` bucket exists because handle availability is an enumeration oracle:
+without a limit, anyone signed in could walk the namespace and learn which names
+other people hold. Checking a name costs 120/hour per user and 200/hour per IP;
+actually claiming or renaming one costs 10/hour per user and 30/hour per IP, on
+top of the `create` bucket that already guards inbox creation.
 
 The counter is incremented and read back in **one** statement — an upsert with
 `RETURNING` — and a login code's attempt counter is claimed the same way with
@@ -329,7 +335,9 @@ whether an address has an account.
 - **Avatars are stored as palettes** — six hex values. The uploaded image is
   decoded, validated, and dropped.
 - **Account deletion cascades** to sessions, OAuth accounts, inboxes, messages,
-  hints and images.
+  hints and images. A handle is a column on the inbox row, and retired handles
+  hang off that row too, so a chosen name disappears with the account rather
+  than being orphaned and re-claimable by a stranger.
 - Nothing is sold, and there is no mechanism by which it could be.
 
 ### 14. Secrets
@@ -369,11 +377,11 @@ PostCSS is pinned to **8.5.28** via a package override, past the 8.5.23 advisory
 and Vitest is on **5.0.2**, past its advisory. Next.js is held at **15.5.26 or
 later** — do not downgrade it.
 
-Runtime dependencies are `next`, `react`, `react-dom` and `zod`. The pieces that
-would normally be packages — PNG decoding, SMTP, hashing, HTTP fetching — are
-written in-repo precisely so that the attack surface of the dependency tree is
-small enough to audit by reading. See
-[architecture](architecture.md#dependencies).
+Runtime dependencies are `next`, `react`, `react-dom`, `zod`, `nanoid`,
+`postgres`, and two Fontsource packages. The pieces that would normally be
+packages — PNG decoding, SMTP, hashing, HTTP fetching — are written in-repo
+precisely so that the attack surface of the dependency tree is small enough to
+audit by reading. See [architecture](architecture.md#dependencies).
 
 > **Self-hosters:** the Postgres driver is the pure-JavaScript `postgres`
 > package, not `pg` or `better-sqlite3`, so there is no native module to compile
@@ -405,7 +413,13 @@ They are written to fail loudly if the protection is ever removed:
   truncated signatures, interlaced images, unknown colour types and filters.
 
 Plus `tests/palette.test.ts` (18) for the algorithm, including a golden hash
-(`26d88308`) that pins the output for a fixed input.
+(`26d88308`) that pins the output for a fixed input, and
+`tests/handle.test.ts` (25), which covers the parts of a handle that are
+security-relevant rather than cosmetic: that a name can never shadow a route
+the app owns, impersonate the service or its mail, read as a top-level domain,
+or hide a reserved name behind dots and dashes; that a leading dot, a path
+separator, markup, a null byte and anything non-ASCII are refused outright; and
+that the hint shown while typing never reveals whether a name is taken.
 
 ```bash
 npm test
