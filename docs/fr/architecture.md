@@ -7,27 +7,27 @@ comment tout s'assemble et, là où il y avait un choix, pourquoi ce choix-là.
 ## La forme du système
 
 ```
-                    navigateur
-                       │
-    ┌──────────────────┴───────────────────┐
-    │  /[slug]        composeur, anonyme   │
-    │  /i/[slug]      boîte du propriétaire│
-    │  /h/[token]     lien de réclamation  │
-    │  /algorithm     spec + bac à sable   │
-    │  /api/*         12 gestionnaires     │
-    └──────────────────┬───────────────────┘
-                       │
-        ┌──────────────┴───────────────┐
-        │                              │
-   extract.ts                    extract.ts  ← littéralement le même
-   (navigateur, canvas)         (serveur, png.ts)
-        │                              │
-        │  six valeurs hex           six valeurs hex
-        └──────────┬───────────────────┘
-                   │
-              égalité ?  →  indice vérifié
-                   │
-              postgres  (réseau, pool de connexions)
+                          navigateur
+                          │
+    ┌─────────────────────┴─────────────────────┐
+    │  /[handle|slug]    composeur, anonyme     │
+    │  /i/[handle|slug]  boîte du propriétaire  │
+    │  /h/[jeton]        lien de réclamation    │
+    │  /algorithme       spéc + bac à sable     │
+    │  /api/*            18 gestionnaires       │
+    └─────────────────────┬─────────────────────┘
+                          │
+        ┌─────────────────┴─────────────────────────────┐
+        │    │                                    │     │
+   extract.ts                                extract.ts  ← littéralement le même
+   (navigateur, canvas)               (serveur, png.ts)
+        │    │                                    │     │
+        │    six valeurs hex            six valeurs hex │
+        └─────────────────┬─────────────────────────────┘
+                          │
+            égalité ?  →  indice vérifié
+                          │
+       postgres  (réseau, pool de connexions)
 ```
 
 Le fait structurel le plus important : **`src/lib/palette/extract.ts` est importé

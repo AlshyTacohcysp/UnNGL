@@ -138,7 +138,7 @@ Le serveur refuse de démarrer en production sans elle, volontairement — voir
 ```
 src/
   app/
-    [slug]/       le composeur public (le lien partageable)
+    [slug]/       le composeur public (le lien partageable ; un handle marche aussi)
     i/[slug]/     la boîte de réception du propriétaire
     h/[token]/    le lien de réclamation de l'expéditeur
     algorithm/    la spécification publiée + le bac à sable

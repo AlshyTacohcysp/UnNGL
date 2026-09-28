@@ -7,26 +7,26 @@ and, where there was a choice, why that choice was made.
 ## The shape of the system
 
 ```
-                    browser
-                       │
-    ┌──────────────────┴───────────────────┐
-    │  /[slug]        composer, anonymous  │
-    │  /i/[slug]      owner inbox          │
-    │  /h/[token]     claim link           │
-    │  /algorithm     spec + playground    │
-    │  /api/*         12 route handlers    │
-    └──────────────────┬───────────────────┘
-                       │
-        ┌──────────────┴───────────────┐
-        │                              │
-   extract.ts                    extract.ts  ← literally the same file,
-   (browser, canvas)             (server, png.ts)
-        │                              │
-        │  six hex values            six hex values
-        └──────────┬───────────────────┘
-                   │
-              equality?  →  verified hint
-                   │
+                         browser
+                         │
+    ┌────────────────────┴────────────────────┐
+    │  /[handle|slug]    composer, anonymous  │
+    │  /i/[handle|slug]  owner inbox          │
+    │  /h/[token]        claim link           │
+    │  /algorithm        spec + playground    │
+    │  /api/*            18 route handlers    │
+    └────────────────────┬────────────────────┘
+                         │
+        ┌────────────────┴────────────────────┐
+        │    │                           │    │
+   extract.ts                   extract.ts  ← literally the same file,
+   (browser, canvas)           (server, png.ts)
+        │    │                           │    │
+        │    six hex values  six hex values   │
+        └────────────────┬────────────────────┘
+                         │
+             equality?  →  verified hint
+                         │
               postgres  (network, pooled)
 ```
 

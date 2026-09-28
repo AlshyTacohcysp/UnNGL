@@ -43,8 +43,8 @@ inverse, et il n'y a rien à vendre.
 | Route | Ce que c'est |
 |---|---|
 | `/` | la vitrine |
-| `/[slug]` | **votre lien public.** n'importe qui peut écrire anonymement |
-| `/i/[slug]` | votre boîte de réception : tous les messages, toutes les palettes, rien de verrouillé |
+| `/[handle\|slug]` | **votre lien public.** n'importe qui peut écrire anonymement. Vous recevez un slug automatique, ou vous choisissez un handle comme `amina.k` — les deux continuent de marcher |
+| `/i/[handle\|slug]` | votre boîte de réception : tous les messages, toutes les palettes, rien de verrouillé |
 | `/h/[token]` | le lien privé de l'expéditeur, pour ajouter ou changer un indice plus tard |
 | `/algorithm` | la spécification publique complète, plus un bac à sable qui s'exécute dans votre navigateur |
 | `/login` | code par e-mail, ou OAuth |

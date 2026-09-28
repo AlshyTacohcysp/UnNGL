@@ -129,7 +129,7 @@ The server refuses to boot in production without it, which is intentional — se
 ```
 src/
   app/
-    [slug]/       the public composer (the shareable link)
+    [slug]/       the public composer (the shareable link; a handle works too)
     i/[slug]/     the owner's inbox
     h/[token]/    the sender's claim link
     algorithm/    the published spec + playground

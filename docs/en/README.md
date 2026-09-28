@@ -40,8 +40,8 @@ reverse-searched, and there is nothing to sell.
 | Route | What it is |
 |---|---|
 | `/` | the pitch |
-| `/[slug]` | **your public link.** anyone can write here anonymously |
-| `/i/[slug]` | your inbox: every message, every palette, nothing locked |
+| `/[handle\|slug]` | **your public link.** anyone can write here anonymously. You get a random slug automatically, or you pick a handle such as `amina.k` — both keep working |
+| `/i/[handle\|slug]` | your inbox: every message, every palette, nothing locked |
 | `/h/[token]` | the sender's private claim link, to attach or change a hint later |
 | `/algorithm` | the full public specification, plus a playground that runs in your browser |
 | `/login` | email code, or OAuth |
