@@ -1,0 +1,110 @@
+/**
+ * Blob store for uploaded images.
+ *
+ * Privacy rule baked in: a hint's source photo is kept only long enough to be
+ * independently re-analysed by the server, then deleted on a timer. What remains
+ * forever is the palette and the verification result. Avatars (which a user
+ * deliberately set as their public face) are kept until the user removes them.
+ *
+ * @license AGPL-3.0-or-later
+ */
+
+import { nanoid } from 'nanoid';
+import { all, get, run } from './db';
+import { config } from './config';
+import { decodePng, isPng } from './palette/png';
+import { extractPalette, type Palette } from './palette/extract';
+
+export interface StoredImage {
+  id: string;
+  width: number;
+  height: number;
+  bytesLen: number;
+  delete_after: number | null;
+}
+
+export interface ImageAnalysis extends Palette {
+  width: number;
+  height: number;
+  source: 'png';
+}
+
+export function storeImage(
+  bytes: Uint8Array,
+  opts: { retainDays?: number | null; mime?: string } = {},
+): StoredImage {
+  if (bytes.length > config.limits.maxImageBytes) {
+    throw new Error(`Image is larger than ${Math.round(config.limits.maxImageBytes / 1024)} kB`);
+  }
+  if (!isPng(bytes)) {
+    throw new Error('Only PNG uploads are accepted (the browser transcodes for you)');
+  }
+  const decoded = decodePng(bytes);
+  const edge = Math.max(decoded.width, decoded.height);
+  if (edge > config.limits.maxImageEdge) {
+    throw new Error(`Image is larger than ${config.limits.maxImageEdge}px on its longest side`);
+  }
+  const now = Date.now();
+  const id = nanoid(16);
+  const deleteAfter =
+    opts.retainDays === null
+      ? null
+      : now + (opts.retainDays ?? config.retentionDays) * 86_400_000;
+  run(
+    `INSERT INTO images (id, bytes, mime, width, height, bytes_len, created_at, delete_after)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    id,
+    bytes,
+    opts.mime ?? 'image/png',
+    decoded.width,
+    decoded.height,
+    bytes.length,
+    now,
+    deleteAfter,
+  );
+  return {
+    id,
+    width: decoded.width,
+    height: decoded.height,
+    bytesLen: bytes.length,
+    delete_after: deleteAfter,
+  };
+}
+
+export function readImage(id: string): { bytes: Buffer; mime: string } | undefined {
+  const row = get<{ bytes: Uint8Array; mime: string }>('SELECT bytes, mime FROM images WHERE id = ?', id);
+  if (!row) return undefined;
+  return { bytes: Buffer.from(row.bytes), mime: row.mime };
+}
+
+export function deleteImage(id: string): void {
+  run('DELETE FROM images WHERE id = ?', id);
+}
+
+/** Decoded pixels -> palette, using the exact same code the browser ran. */
+export function analyzePng(bytes: Uint8Array): ImageAnalysis {
+  const img = decodePng(bytes);
+  const palette = extractPalette(img.data, img.width, img.height);
+  return { ...palette, width: img.width, height: img.height, source: 'png' };
+}
+
+/** Delete images whose retention window has closed. Cheap enough to run hourly. */
+export function purgeExpiredImages(): number {
+  const rows = all<{ id: string }>('SELECT id FROM images WHERE delete_after IS NOT NULL AND delete_after < ?', Date.now());
+  for (const r of rows) deleteImage(r.id);
+  return rows.length;
+}
+
+let lastPurge = 0;
+
+/** Run the purge at most once an hour, opportunistically. */
+export function maybePurge(): void {
+  const now = Date.now();
+  if (now - lastPurge < 3_600_000) return;
+  lastPurge = now;
+  try {
+    purgeExpiredImages();
+  } catch (err) {
+    console.error('[images] purge failed', err);
+  }
+}

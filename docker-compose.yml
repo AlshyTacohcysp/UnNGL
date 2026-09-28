@@ -1,0 +1,32 @@
+# UnNGL in one command.
+#
+#   cp .env.example .env      # then set SESSION_SECRET
+#   docker compose up -d
+#
+# The SQLite file lives in ./data on the host, so `docker compose down` never
+# touches your messages.
+
+services:
+  unngl:
+    build: .
+    image: unngl:latest
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env
+    environment:
+      NEXT_PUBLIC_ORIGIN: ${NEXT_PUBLIC_ORIGIN:-http://localhost:3000}
+      DATABASE_PATH: /app/data/unngl.sqlite
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
