@@ -77,6 +77,13 @@ jobs:
           SESSION_SECRET: ci-run-only-not-a-real-secret-but-long-enough
           NEXT_PUBLIC_ORIGIN: http://127.0.0.1:3000
           MAIL_TRANSPORT: console
+          # The port has to match the one `db:serve` above actually binds.
+          # Left unset, config falls back to localhost:5432 while PGlite
+          # listens on 55432, the server answers 500 to every request, and
+          # the step fails as "server did not become healthy" — which says
+          # nothing at all about what was wrong.
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:55432/postgres
+          DB_POOL_MAX: '1'
         run: |
           npm run db:serve > /tmp/pg.log 2>&1 &
           for i in $(seq 1 30); do
